@@ -16,17 +16,19 @@ export function IngredientsList({
           key={group.id}
           style={{ display: "flex", flexDirection: "column", gap: 0 }}
         >
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--color-neutral-600)",
-              marginBottom: 6,
-            }}
-          >
-            {group.label}
-          </div>
+          {group.label ? (
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--color-neutral-600)",
+                marginBottom: 6,
+              }}
+            >
+              {group.label}
+            </div>
+          ) : null}
           {group.items.map((ing) => (
             <div
               key={`${group.id}-${ing.index}`}

@@ -36,7 +36,8 @@ function isIngredient(v: unknown): v is Ingredient {
   return (
     typeof o.qty === "string" &&
     typeof o.name === "string" &&
-    typeof o.inferred === "boolean"
+    typeof o.inferred === "boolean" &&
+    (o.group === undefined || typeof o.group === "string")
   );
 }
 

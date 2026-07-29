@@ -5,6 +5,7 @@ export const ingredientSchema = z.object({
   qty: z.string(),
   name: z.string().min(1),
   inferred: z.boolean(),
+  group: z.string().min(1),
 });
 
 export const stepSchema = z.object({

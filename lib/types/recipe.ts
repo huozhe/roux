@@ -2,6 +2,8 @@ export type Ingredient = {
   qty: string;
   name: string;
   inferred: boolean;
+  /** Culinary group label from LLM (e.g. "Protein", "For the sauce"). Optional for legacy rows. */
+  group?: string;
 };
 
 export type Step = {

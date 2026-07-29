@@ -1,37 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { classifyIngredient, groupIngredients } from "./group";
-
-describe("classifyIngredient", () => {
-  it("tags protein", () => {
-    assert.equal(classifyIngredient("mock tender beef (shoulder cut)"), "protein");
-    assert.equal(classifyIngredient("soft tofu, cubed"), "protein");
-  });
-  it("tags aromatics and spices", () => {
-    assert.equal(classifyIngredient("ginger (for braising)"), "aromatics");
-    assert.equal(classifyIngredient("star anise"), "aromatics");
-    assert.equal(classifyIngredient("salt"), "spices");
-  });
-  it("tags sauces and liquids", () => {
-    assert.equal(classifyIngredient("light soy sauce"), "sauces");
-    assert.equal(classifyIngredient("braising liquid (reserved)"), "liquids");
-    assert.equal(classifyIngredient("neutral oil (for searing)"), "liquids");
-  });
-});
+import { groupIngredients } from "./group";
 
 describe("groupIngredients", () => {
-  it("one flat list becomes labeled groups, order preserved within group", () => {
+  it("respects LLM group labels and order", () => {
     const groups = groupIngredients([
-      { qty: "1", name: "pork shoulder", inferred: false },
-      { qty: "1", name: "ginger", inferred: false },
-      { qty: "1 tbsp", name: "soy sauce", inferred: false },
-      { qty: "1 cup", name: "chicken stock", inferred: false },
+      { qty: "400 g", name: "beef", inferred: false, group: "Protein" },
+      { qty: "2", name: "star anise", inferred: false, group: "Aromatics" },
+      { qty: "1 tbsp", name: "soy sauce", inferred: false, group: "Sauces & condiments" },
+      { qty: "1 tsp", name: "dark soy", inferred: true, group: "Sauces & condiments" },
     ]);
-    assert.deepEqual(
-      groups.map((g) => g.id),
-      ["protein", "aromatics", "sauces", "liquids"],
-    );
-    assert.equal(groups.find((g) => g.id === "protein")!.items[0]!.name, "pork shoulder");
-    assert.equal(groups.find((g) => g.id === "liquids")!.items[0]!.name, "chicken stock");
+    assert.equal(groups.length, 3);
+    assert.equal(groups[0]!.label, "Protein");
+    assert.equal(groups[1]!.label, "Aromatics");
+    assert.equal(groups[2]!.label, "Sauces & condiments");
+    assert.equal(groups[2]!.items.length, 2);
+  });
+
+  it("legacy ingredients without group stay one list, original order", () => {
+    const groups = groupIngredients([
+      { qty: "1", name: "beef", inferred: false },
+      { qty: "1", name: "ginger", inferred: false },
+    ]);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0]!.label, "");
+    assert.equal(groups[0]!.items[0]!.name, "beef");
+    assert.equal(groups[0]!.items[1]!.name, "ginger");
   });
 });

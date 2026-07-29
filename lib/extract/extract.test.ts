@@ -17,9 +17,14 @@ const validFixture = {
   cook_minutes: 25,
   servings: "serves 2",
   ingredients: [
-    { qty: "400 g", name: "soft tofu", inferred: false },
-    { qty: "150 g", name: "ground pork", inferred: false },
-    { qty: "2 tbsp", name: "doubanjiang", inferred: true },
+    { qty: "400 g", name: "soft tofu", inferred: false, group: "Protein" },
+    { qty: "150 g", name: "ground pork", inferred: false, group: "Protein" },
+    {
+      qty: "2 tbsp",
+      name: "doubanjiang",
+      inferred: true,
+      group: "Sauces & condiments",
+    },
   ],
   steps: [
     { text: "Blanch tofu cubes in salted water.", t_seconds: 45 },

@@ -29,10 +29,13 @@ function asIngredients(v: unknown): Ingredient[] {
   if (!Array.isArray(v)) return [];
   return v.map((item) => {
     const o = item as Partial<Ingredient>;
+    const group =
+      typeof o.group === "string" && o.group.trim() ? o.group.trim() : undefined;
     return {
       qty: typeof o.qty === "string" ? o.qty : "",
       name: typeof o.name === "string" ? o.name : "",
       inferred: Boolean(o.inferred),
+      ...(group ? { group } : {}),
     };
   });
 }

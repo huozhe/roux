@@ -890,7 +890,12 @@ function EditForm({
           className="btn btn-secondary"
           onClick={() =>
             patch((d) => {
-              d.ingredients.push({ qty: "", name: "", inferred: false });
+              d.ingredients.push({
+                qty: "",
+                name: "",
+                inferred: false,
+                group: "Other",
+              });
             })
           }
           style={{ alignSelf: "flex-start", marginTop: 0 }}
