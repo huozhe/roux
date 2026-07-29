@@ -35,6 +35,7 @@ export function formatTimestamp(seconds: number): string {
 }
 
 export function youtubeWatchUrl(videoId: string, tSeconds?: number): string {
+  // https watch URLs open the YouTube app on mobile when installed (universal links).
   const base = `https://www.youtube.com/watch?v=${videoId}`;
   if (tSeconds == null || tSeconds <= 0) return base;
   return `${base}&t=${Math.floor(tSeconds)}s`;
@@ -42,6 +43,16 @@ export function youtubeWatchUrl(videoId: string, tSeconds?: number): string {
 
 export function youtubeStepUrl(videoId: string, tSeconds: number): string {
   return youtubeWatchUrl(videoId, tSeconds);
+}
+
+/** In-page embed (youtube-nocookie when possible). */
+export function youtubeEmbedUrl(videoId: string, tSeconds?: number): string {
+  const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
+  const params = new URLSearchParams({ rel: "0", modestbranding: "1" });
+  if (tSeconds != null && tSeconds > 0) {
+    params.set("start", String(Math.floor(tSeconds)));
+  }
+  return `${base}?${params.toString()}`;
 }
 
 /** URL slug base from title; caller appends uniqueness suffix. */

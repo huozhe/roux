@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { IngredientsList } from "@/components/recipe/IngredientsList";
 import { getSharedRecipeBySlug } from "@/lib/fixtures/shares";
 import {
   formatCookMinutes,
-  formatQty,
   formatTimestamp,
+  youtubeEmbedUrl,
   youtubeStepUrl,
   youtubeWatchUrl,
 } from "@/lib/format";
@@ -108,29 +109,52 @@ function PublicRecipeBody({ recipe }: { recipe: Recipe }) {
       </div>
 
       {playable ? (
-        <div
-          className="card"
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "13.2px",
-            padding: "13.2px 17.6px",
-          }}
-        >
-          <span style={{ flex: 1, minWidth: 200, fontSize: "13.5px" }}>
-            Written from the video by <strong>{recipe.channel_title}</strong>.
-            Watch the original for technique and timing.
-          </span>
-          <a
-            className="btn btn-primary"
-            href={youtubeWatchUrl(recipe.video_id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ marginTop: 0, flex: "none" }}
+        <div className="card" style={{ gap: "13.2px", padding: "13.2px 17.6px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "13.2px",
+            }}
           >
-            Watch on YouTube
-          </a>
+            <span style={{ flex: 1, minWidth: 200, fontSize: "13.5px" }}>
+              Written from the video by <strong>{recipe.channel_title}</strong>.
+              Watch the original for technique and timing.
+            </span>
+            <a
+              className="btn btn-primary"
+              href={youtubeWatchUrl(recipe.video_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ marginTop: 0, flex: "none" }}
+            >
+              Watch on YouTube
+            </a>
+          </div>
+          <div
+            style={{
+              position: "relative",
+              aspectRatio: "16 / 9",
+              borderRadius: 20,
+              overflow: "hidden",
+              background: "var(--color-neutral-300)",
+            }}
+          >
+            <iframe
+              title={recipe.video_title}
+              src={youtubeEmbedUrl(recipe.video_id)}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                border: 0,
+              }}
+            />
+          </div>
         </div>
       ) : (
         <div
@@ -182,31 +206,7 @@ function PublicRecipeBody({ recipe }: { recipe: Recipe }) {
             {recipe.ingredients.length}
           </span>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: "8.8px",
-          }}
-        >
-          {recipe.ingredients.map((ing, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                gap: 10,
-                fontSize: 15,
-                padding: "6px 0",
-                borderBottom: "1px solid var(--color-divider)",
-              }}
-            >
-              <span style={{ fontWeight: 700, minWidth: 82 }}>
-                {formatQty(ing)}
-              </span>
-              <span>{ing.name}</span>
-            </div>
-          ))}
-        </div>
+        <IngredientsList ingredients={recipe.ingredients} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "13.2px" }}>

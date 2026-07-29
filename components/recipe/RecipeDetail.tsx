@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { IngredientsList } from "@/components/recipe/IngredientsList";
 import {
   formatCookMinutes,
   formatQty,
@@ -9,6 +10,7 @@ import {
   fullDate,
   makeShareSlug,
   relativeAgo,
+  youtubeEmbedUrl,
   youtubeStepUrl,
   youtubeWatchUrl,
 } from "@/lib/format";
@@ -622,58 +624,31 @@ function SingleScroll({
       )}
 
       {playable && videoOpen && (
-        <a
-          href={youtubeWatchUrl(recipe.video_id)}
-          target="_blank"
-          rel="noreferrer"
+        <div
           style={{
-            display: "block",
             position: "relative",
             aspectRatio: "16 / 9",
             borderRadius: 28,
             background: "var(--color-neutral-300)",
             overflow: "hidden",
             marginTop: -13.2,
+            boxShadow: "var(--shadow-sm)",
           }}
         >
-          <span
+          <iframe
+            title={recipe.video_title}
+            src={youtubeEmbedUrl(recipe.video_id)}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
             style={{
               position: "absolute",
               inset: 0,
-              display: "grid",
-              placeItems: "center",
+              width: "100%",
+              height: "100%",
+              border: 0,
             }}
-          >
-            <span
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: 999,
-                background: "var(--color-accent)",
-                display: "grid",
-                placeItems: "center",
-                color: "var(--color-bg)",
-                boxShadow: "var(--shadow-md)",
-              }}
-            >
-              <PlayIcon size={28} />
-            </span>
-          </span>
-          <span
-            style={{
-              position: "absolute",
-              left: 14,
-              bottom: 14,
-              fontSize: 12,
-              padding: "5px 12px",
-              borderRadius: 999,
-              background: "rgba(32,30,29,0.72)",
-              color: "#f5ead8",
-            }}
-          >
-            {recipe.video_title}
-          </span>
-        </a>
+          />
+        </div>
       )}
 
       {gone && (
@@ -717,31 +692,7 @@ function SingleScroll({
             {recipe.ingredients.length}
           </span>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 8.8,
-          }}
-        >
-          {recipe.ingredients.map((ing, i) => (
-            <div
-              key={`${ing.name}-${i}`}
-              style={{
-                display: "flex",
-                gap: 10,
-                fontSize: 15,
-                padding: "6px 0",
-                borderBottom: "1px solid var(--color-divider)",
-              }}
-            >
-              <span style={{ fontWeight: 700, minWidth: 82 }}>
-                {formatQty(ing)}
-              </span>
-              <span>{ing.name}</span>
-            </div>
-          ))}
-        </div>
+        <IngredientsList ingredients={recipe.ingredients} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
