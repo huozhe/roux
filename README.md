@@ -37,8 +37,8 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 | M0–M1 | Scaffold, Organic, login, types/fixtures/helpers |
 | Wave 2 | T1 auth+Drizzle · T3 Claude extract · T6 library · T7 recipe/cook · T8 share/export/settings |
 | T4 | YouTube playlists API + Settings picker |
-| T5 | Sync pipeline, cron, live recipes API, Sync page, live data adapter |
-| Next | Set `ANTHROPIC_API_KEY` · run Sync now · polish / T9 |
+| T5 | Sync pipeline, live recipes API, Sync page, live data adapter |
+| Sync | **Local only** — `npm run sync` (YouTube blocks Vercel IPs for captions) |
 
 ### Try locally
 
@@ -46,9 +46,23 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 npm run dev
 ```
 
-Without Google env, auth gate is open so fixtures work:
+### Sync playlists → recipes (local)
 
-- `/` library · `/recipes/r1` · `/recipes/r1/cook` · `/settings` · `/r/mapo-tofu-a7f3` · `/login`
+YouTube returns `LOGIN_REQUIRED` from Vercel/AWS. Run extract on your machine
+(home IP); data still lands in Neon for the live site.
+
+```bash
+# .env.local needs DATABASE_URL, ANTHROPIC_API_KEY, AUTH_GOOGLE_*, TOKEN_ENCRYPTION_KEY
+# Sign in once on the web app first (stores YouTube refresh token).
+
+npm run sync
+npm run sync -- --max=10
+npm run sync -- --email=you@gmail.com
+```
+
+Then refresh https://roux-green.vercel.app — library reads the same DB.
+
+Cloud **Sync now** is disabled on purpose. Purge cron (archived recipes) still runs on Vercel.
 
 ### Auth + DB (when ready)
 

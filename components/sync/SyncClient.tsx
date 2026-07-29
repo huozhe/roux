@@ -211,8 +211,14 @@ export function SyncClient() {
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
+          code?: string;
+          hint?: string;
         };
-        setError(data.error ?? `Sync failed (${res.status})`);
+        const msg =
+          data.code === "SYNC_LOCAL_ONLY"
+            ? `${data.error ?? "Cloud sync disabled."} (local: ${data.hint ?? "npm run sync"})`
+            : (data.error ?? `Sync failed (${res.status})`);
+        setError(msg);
         setSyncStage("");
         setSyncing(false);
         return;
@@ -298,8 +304,41 @@ export function SyncClient() {
       <div>
         <h1 style={{ fontSize: 34, margin: 0 }}>Sync</h1>
         <div className="text-muted" style={{ fontSize: "13.5px" }}>
-          Roux checks the playlist on a schedule and writes up anything new.
+          Fetch captions and write recipes from your selected playlists.
         </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          padding: "17.6px 22px",
+          gap: "8.8px",
+          background: "var(--color-accent-2-100)",
+        }}
+      >
+        <h4 style={{ margin: 0, color: "var(--color-accent-2-900)" }}>
+          Sync runs on your computer
+        </h4>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--color-accent-2-900)" }}>
+          YouTube blocks caption access from Vercel (cloud IPs). On your laptop,
+          with <code>.env.local</code> configured, run:
+        </p>
+        <pre
+          style={{
+            margin: 0,
+            padding: "10px 14px",
+            borderRadius: 12,
+            background: "var(--color-bg)",
+            fontSize: 14,
+            overflowX: "auto",
+          }}
+        >
+          npm run sync
+        </pre>
+        <p className="text-muted" style={{ margin: 0, fontSize: 12.5 }}>
+          Uses the same Neon DB as production — refresh the library after it
+          finishes. Optional: <code>npm run sync -- --max=10</code>
+        </p>
       </div>
 
       {error ? (

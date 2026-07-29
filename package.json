@@ -11,7 +11,8 @@
     "db:push": "node --import tsx scripts/db-with-env.ts drizzle-kit push",
     "db:generate": "node --import tsx scripts/db-with-env.ts drizzle-kit generate",
     "db:studio": "node --import tsx scripts/db-with-env.ts drizzle-kit studio",
-    "db:init-schema": "node --import tsx scripts/db-init-schema.ts"
+    "db:init-schema": "node --import tsx scripts/db-init-schema.ts",
+    "sync": "node --import tsx scripts/sync-local.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -5,6 +5,11 @@ export const maxDuration = 300;
 
 /**
  * POST /api/sync — manual sync, SSE stages (text/event-stream).
+ *
+ * On Vercel, disabled by default: YouTube returns LOGIN_REQUIRED from
+ * datacenter IPs. Run captions+extract on your machine instead:
+ *   npm run sync
+ * Set SYNC_ALLOW_CLOUD=true only if you accept cookie/proxy tradeoffs.
  */
 export async function POST() {
   const session = await auth().catch(() => null);
@@ -21,6 +26,23 @@ export async function POST() {
       status: 503,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  const onVercel = process.env.VERCEL === "1";
+  const allowCloud = process.env.SYNC_ALLOW_CLOUD === "true";
+  if (onVercel && !allowCloud) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Cloud sync is disabled: YouTube blocks caption access from Vercel. On your laptop (with .env.local) run: npm run sync",
+        code: "SYNC_LOCAL_ONLY",
+        hint: "npm run sync",
+      }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   const encoder = new TextEncoder();
