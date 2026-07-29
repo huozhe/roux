@@ -1,25 +1,20 @@
 /**
  * Fetch timed captions for a YouTube video.
  *
- * Uses YouTube ANDROID innertube player (v20) — WEB client is blocked from
- * many cloud IPs. Optional OAuth access token helps with unlisted videos the
- * user can access via their playlist.
+ * Uses YouTube ANDROID/IOS innertube player (WEB is often UNPLAYABLE from cloud).
+ * Important: do NOT send Google OAuth Bearer on the first attempt — it can make
+ * the player endpoint fail; only retry with token for unlisted/private access.
  */
 import type { CaptionCue } from "@/lib/extract";
 
 const ANDROID_VERSION = "20.10.38";
-const ANDROID_UA = `com.google.android.youtube/${ANDROID_VERSION} (Linux; U; Android 14)`;
+const IOS_VERSION = "20.10.4";
 const WEB_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)";
 
 export type TranscriptFetchOpts = {
-  /** Google OAuth access token (youtube.readonly) — improves unlisted/private access. */
+  /** Google OAuth access token — used only as a retry for restricted videos. */
   accessToken?: string;
-};
-
-export type TranscriptFailure = {
-  videoId: string;
-  reason: string;
 };
 
 type CaptionTrack = {
@@ -27,7 +22,6 @@ type CaptionTrack = {
   languageCode?: string;
   kind?: string;
   vssId?: string;
-  name?: { simpleText?: string };
 };
 
 type PlayerResponse = {
@@ -38,6 +32,31 @@ type PlayerResponse = {
   };
   playabilityStatus?: { status?: string; reason?: string };
 };
+
+type ClientSpec = {
+  name: string;
+  clientName: string;
+  clientVersion: string;
+  userAgent: string;
+  extraClient?: Record<string, unknown>;
+};
+
+const CLIENTS: ClientSpec[] = [
+  {
+    name: "ANDROID",
+    clientName: "ANDROID",
+    clientVersion: ANDROID_VERSION,
+    userAgent: `com.google.android.youtube/${ANDROID_VERSION} (Linux; U; Android 14)`,
+    extraClient: { androidSdkVersion: 34, hl: "en", gl: "US" },
+  },
+  {
+    name: "IOS",
+    clientName: "IOS",
+    clientVersion: IOS_VERSION,
+    userAgent: `com.google.ios.youtube/${IOS_VERSION} (iPhone16,2; U; CPU iOS 17_5 like Mac OS X;)`,
+    extraClient: { hl: "en", gl: "US", deviceModel: "iPhone16,2" },
+  },
+];
 
 function decodeXmlEntities(s: string): string {
   return s
@@ -57,7 +76,6 @@ function stripTags(s: string): string {
   return decodeXmlEntities(s.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
-/** Classic timedtext: <text start="seconds" dur="seconds"> */
 function parseXmlCaptions(xml: string): CaptionCue[] {
   const cues: CaptionCue[] = [];
   const re = /<text\b([^>]*)>([\s\S]*?)<\/text>/gi;
@@ -83,7 +101,6 @@ function parseXmlCaptions(xml: string): CaptionCue[] {
   return cues;
 }
 
-/** srv3 timedtext: <p t="ms" d="ms"> */
 function parseSrv3Captions(xml: string): CaptionCue[] {
   const cues: CaptionCue[] = [];
   const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
@@ -157,8 +174,9 @@ function rankTracks(tracks: CaptionTrack[]): CaptionTrack[] {
   const score = (t: CaptionTrack) => {
     let s = 0;
     const lang = (t.languageCode ?? "").toLowerCase();
+    // Prefer English for Claude extraction quality, but accept zh/etc.
     if (lang === "en" || lang.startsWith("en-") || lang.startsWith("en_")) s += 10;
-    if (lang.startsWith("zh")) s += 8; // cooking playlists often Chinese
+    if (lang.startsWith("zh")) s += 8;
     if (t.vssId?.includes(".en")) s += 5;
     if (t.kind !== "asr") s += 2;
     return s;
@@ -170,14 +188,20 @@ function pickTrack(tracks: CaptionTrack[]): CaptionTrack | null {
   return rankTracks(tracks)[0] ?? null;
 }
 
-async function fetchAndroidPlayer(
+type PlayerAttempt =
+  | { ok: true; player: PlayerResponse; client: string; withAuth: boolean }
+  | { ok: false; client: string; withAuth: boolean; error: string };
+
+async function fetchPlayer(
   videoId: string,
+  client: ClientSpec,
   accessToken?: string,
-): Promise<PlayerResponse | null> {
+): Promise<PlayerAttempt> {
+  const withAuth = Boolean(accessToken);
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": ANDROID_UA,
+      "User-Agent": client.userAgent,
     };
     if (accessToken) {
       headers.Authorization = `Bearer ${accessToken}`;
@@ -190,11 +214,9 @@ async function fetchAndroidPlayer(
         body: JSON.stringify({
           context: {
             client: {
-              clientName: "ANDROID",
-              clientVersion: ANDROID_VERSION,
-              hl: "en",
-              gl: "US",
-              androidSdkVersion: 34,
+              clientName: client.clientName,
+              clientVersion: client.clientVersion,
+              ...(client.extraClient ?? {}),
             },
           },
           videoId,
@@ -203,10 +225,24 @@ async function fetchAndroidPlayer(
         }),
       },
     );
-    if (!resp.ok) return null;
-    return (await resp.json()) as PlayerResponse;
-  } catch {
-    return null;
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return {
+        ok: false,
+        client: client.name,
+        withAuth,
+        error: `HTTP ${resp.status}${text ? `: ${text.slice(0, 120)}` : ""}`,
+      };
+    }
+    const player = (await resp.json()) as PlayerResponse;
+    return { ok: true, player, client: client.name, withAuth };
+  } catch (err) {
+    return {
+      ok: false,
+      client: client.name,
+      withAuth,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -215,17 +251,18 @@ async function downloadTrack(
   videoId: string,
 ): Promise<CaptionCue[] | null> {
   try {
-    // Prefer default XML (srv3) — more reliable than fmt=json3 on some tracks
-    const attempts = [baseUrl];
+    const attempts: string[] = [];
     try {
-      const u = new URL(baseUrl);
-      u.searchParams.set("fmt", "srv3");
-      attempts.unshift(u.toString());
-      const u2 = new URL(baseUrl);
-      u2.searchParams.set("fmt", "json3");
-      attempts.push(u2.toString());
+      // Default (often srv3) first — most reliable
+      attempts.push(baseUrl);
+      const srv3 = new URL(baseUrl);
+      srv3.searchParams.set("fmt", "srv3");
+      attempts.push(srv3.toString());
+      const json3 = new URL(baseUrl);
+      json3.searchParams.set("fmt", "json3");
+      attempts.push(json3.toString());
     } catch {
-      /* use base only */
+      attempts.push(baseUrl);
     }
 
     for (const url of attempts) {
@@ -233,7 +270,7 @@ async function downloadTrack(
         headers: {
           "User-Agent": WEB_UA,
           Referer: `https://www.youtube.com/watch?v=${videoId}`,
-          "Accept-Language": "en-US,en;q=0.9",
+          "Accept-Language": "en-US,en;q=0.9,zh;q=0.8",
         },
       });
       if (!res.ok) continue;
@@ -247,26 +284,13 @@ async function downloadTrack(
   return null;
 }
 
-export type TranscriptResult =
-  | { ok: true; cues: CaptionCue[] }
-  | { ok: false; reason: string };
-
-/**
- * Detailed fetch for sync diagnostics.
- */
-export async function fetchTranscriptDetailed(
+async function cuesFromPlayer(
+  player: PlayerResponse,
   videoId: string,
-  opts?: TranscriptFetchOpts,
-): Promise<TranscriptResult> {
-  if (!videoId || !/^[\w-]{6,}$/.test(videoId)) {
-    return { ok: false, reason: "invalid video id" };
-  }
-
-  const player = await fetchAndroidPlayer(videoId, opts?.accessToken);
-  if (!player) {
-    return { ok: false, reason: "player request failed" };
-  }
-
+): Promise<
+  | { ok: true; cues: CaptionCue[] }
+  | { ok: false; reason: string }
+> {
   const status = player.playabilityStatus?.status;
   if (status && status !== "OK") {
     return {
@@ -298,6 +322,74 @@ export async function fetchTranscriptDetailed(
   return {
     ok: false,
     reason: `caption download empty (tracks: ${tried.join(", ") || "none"})`,
+  };
+}
+
+export type TranscriptResult =
+  | { ok: true; cues: CaptionCue[] }
+  | { ok: false; reason: string };
+
+/**
+ * Detailed fetch for sync diagnostics.
+ */
+export async function fetchTranscriptDetailed(
+  videoId: string,
+  opts?: TranscriptFetchOpts,
+): Promise<TranscriptResult> {
+  if (!videoId || !/^[\w-]{6,}$/.test(videoId)) {
+    return { ok: false, reason: "invalid video id" };
+  }
+
+  const attempts: string[] = [];
+  let lastPlayerFail = "";
+
+  // 1) Clients without OAuth (public path — preferred)
+  // 2) Same clients with OAuth only if needed
+  const authModes: Array<string | undefined> = [undefined];
+  if (opts?.accessToken) authModes.push(opts.accessToken);
+
+  for (const token of authModes) {
+    for (const client of CLIENTS) {
+      const attempt = await fetchPlayer(videoId, client, token);
+      if (!attempt.ok) {
+        attempts.push(
+          `${client.name}${token ? "+auth" : ""}: ${attempt.error}`,
+        );
+        lastPlayerFail = attempt.error;
+        continue;
+      }
+
+      const tracks =
+        attempt.player.captions?.playerCaptionsTracklistRenderer
+          ?.captionTracks ?? [];
+      const status = attempt.player.playabilityStatus?.status ?? "?";
+
+      // If playable with tracks, download
+      if (status === "OK" && tracks.length) {
+        const result = await cuesFromPlayer(attempt.player, videoId);
+        if (result.ok) return result;
+        attempts.push(
+          `${client.name}${token ? "+auth" : ""}: ${result.reason}`,
+        );
+        continue;
+      }
+
+      attempts.push(
+        `${client.name}${token ? "+auth" : ""}: status=${status} tracks=${tracks.length}`,
+      );
+      lastPlayerFail = `status=${status} tracks=${tracks.length}`;
+    }
+  }
+
+  if (attempts.length === 0) {
+    return { ok: false, reason: "player request failed" };
+  }
+
+  // Compact reason for UI
+  const summary = attempts.slice(0, 4).join(" · ");
+  return {
+    ok: false,
+    reason: `player/captions failed (${summary})${lastPlayerFail && attempts.length > 4 ? "…" : ""}`,
   };
 }
 
