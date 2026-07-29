@@ -1,0 +1,148 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  bigserial,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { Ingredient, Step, UserPrefs } from "@/lib/types";
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  googleSub: text("google_sub").notNull().unique(),
+  /** AES-GCM ciphertext (lib/crypto); never store plaintext. */
+  refreshToken: text("refresh_token"),
+  prefs: jsonb("prefs")
+    .$type<UserPrefs>()
+    .notNull()
+    .default(
+      sql`'{"layout":"single","timestamps":true,"newShelf":false}'::jsonb`,
+    ),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const playlists = pgTable("playlists", {
+  id: text("id").primaryKey(), // YouTube playlist id
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  visibility: text("visibility").notNull(), // private | unlisted | public
+  itemCount: integer("item_count").notNull().default(0),
+  selected: boolean("selected").notNull().default(false),
+  lastSynced: timestamp("last_synced", { withTimezone: true }),
+});
+
+export const recipes = pgTable(
+  "recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    playlistId: text("playlist_id").references(() => playlists.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    videoTitle: text("video_title").notNull(),
+    channelTitle: text("channel_title").notNull(),
+    channelId: text("channel_id"),
+    thumbnailUrl: text("thumbnail_url"),
+    thumbnailBlob: text("thumbnail_blob"),
+    cuisine: text("cuisine"),
+    mainIngredient: text("main_ingredient"),
+    cookMinutes: integer("cook_minutes"),
+    servings: text("servings"),
+    ingredients: jsonb("ingredients")
+      .$type<Ingredient[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    steps: jsonb("steps")
+      .$type<Step[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    notes: text("notes"),
+    confidence: text("confidence").notNull().default("medium"), // high | medium | low
+    verified: boolean("verified").notNull().default(false),
+    videoStatus: text("video_status").notNull().default("ok"), // ok | gone | off_playlist
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull(),
+    writtenAt: timestamp("written_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // Full-text search: add via SQL migration (generated tsvector + GIN).
+    // See lib/db/migrations/0001_search.sql
+    // search tsvector GENERATED ALWAYS AS (
+    //   to_tsvector('english', coalesce(title,'') || ' ' || ... || coalesce(ingredients::text,''))
+    // ) STORED;
+  },
+  (t) => [
+    unique("recipes_user_video").on(t.userId, t.videoId),
+    index("recipes_user_added_idx").on(t.userId, t.addedAt),
+    index("recipes_user_uploaded_idx").on(t.userId, t.uploadedAt),
+  ],
+);
+
+export const shareLinks = pgTable("share_links", {
+  slug: text("slug").primaryKey(),
+  recipeId: uuid("recipe_id")
+    .notNull()
+    .references(() => recipes.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+export const syncRuns = pgTable("sync_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  found: integer("found").notNull().default(0),
+  written: integer("written").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  result: text("result"), // ok | no change | N no transcript | quota hit | error
+  detail: jsonb("detail"),
+});
+
+/** Hard-delete tombstones so sync never re-adds a permanently removed video. */
+export const recipeTombstones = pgTable(
+  "recipe_tombstones",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.videoId] })],
+);
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type PlaylistRow = typeof playlists.$inferSelect;
+export type RecipeRow = typeof recipes.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
+export type SyncRun = typeof syncRuns.$inferSelect;
+export type RecipeTombstone = typeof recipeTombstones.$inferSelect;

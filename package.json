@@ -7,11 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test 'lib/**/*.test.ts'"
+    "test": "tsx --test 'lib/**/*.test.ts'",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2",
+    "lucide-react": "^0.577.0",
     "next": "16.2.12",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.4.3"
@@ -21,6 +28,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
