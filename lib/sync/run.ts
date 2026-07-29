@@ -17,7 +17,7 @@ import {
   type PlaylistItem,
 } from "@/lib/youtube/playlist-items";
 import { getAccessTokenForUser } from "@/lib/youtube/tokens";
-import { fetchTranscriptCues } from "@/lib/youtube/transcript";
+import { fetchTranscriptDetailed } from "@/lib/youtube/transcript";
 import { getVideosStatus } from "@/lib/youtube/videos";
 
 export type SyncProgress = {
@@ -40,6 +40,7 @@ export type SyncDetail = {
     videoId: string;
     title: string;
     playlistId: string;
+    reason?: string;
   }>;
   errors: Array<{ videoId?: string; message: string }>;
   maxNewVideos: number;
@@ -273,16 +274,19 @@ export async function runSyncForUser(
         skipped,
       });
 
-      const cues = await fetchTranscriptCues(item.videoId);
-      if (!cues?.length) {
+      const transcript = await fetchTranscriptDetailed(item.videoId, {
+        accessToken,
+      });
+      if (!transcript.ok) {
         skipped += 1;
         detail.needTranscript.push({
           videoId: item.videoId,
           title: item.title,
           playlistId: item.playlistId,
+          reason: transcript.reason,
         });
         onProgress({
-          stage: `No transcript — skipped “${item.title}”`,
+          stage: `No transcript — skipped “${item.title}” (${transcript.reason})`,
           found,
           written,
           skipped,
@@ -291,6 +295,7 @@ export async function runSyncForUser(
         processedNew += 1;
         continue;
       }
+      const cues = transcript.cues;
 
       onProgress({
         stage: `Writing up “${item.title}”…`,

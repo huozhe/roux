@@ -17,6 +17,15 @@ export type SyncRunRow = {
   written: number;
   skipped: number;
   result: string | null;
+  detail?: {
+    needTranscript?: Array<{
+      videoId?: string;
+      title?: string;
+      reason?: string;
+    }>;
+    errors?: Array<{ videoId?: string; message?: string }>;
+    message?: string;
+  } | null;
 };
 
 type Counters = {
@@ -44,6 +53,10 @@ function parseHistory(json: unknown): SyncRunRow[] {
       (typeof r.startedAt === "string" && r.startedAt) ||
       "";
     if (!started) continue;
+    const detail =
+      r.detail && typeof r.detail === "object"
+        ? (r.detail as SyncRunRow["detail"])
+        : null;
     out.push({
       id: (r.id as number | string | undefined) ?? started,
       started_at: started,
@@ -60,6 +73,7 @@ function parseHistory(json: unknown): SyncRunRow[] {
           : r.result == null
             ? null
             : String(r.result),
+      detail,
     });
   }
   return out;
@@ -516,6 +530,88 @@ export function SyncClient() {
             </tbody>
           </table>
         </div>
+        {history[0]?.detail?.needTranscript &&
+        history[0].detail.needTranscript.length > 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              padding: "13.2px 17.6px",
+              borderRadius: 20,
+              background: "var(--color-bg)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--color-neutral-600)",
+              }}
+            >
+              Last run — no transcript
+            </div>
+            {history[0].detail.needTranscript.slice(0, 8).map((item, i) => (
+              <div key={item.videoId ?? i} style={{ fontSize: 13.5 }}>
+                <strong>{item.title ?? item.videoId ?? "Video"}</strong>
+                {item.videoId ? (
+                  <>
+                    {" "}
+                    <a
+                      href={`https://www.youtube.com/watch?v=${item.videoId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12.5 }}
+                    >
+                      open
+                    </a>
+                  </>
+                ) : null}
+                {item.reason ? (
+                  <div className="text-muted" style={{ fontSize: 12.5 }}>
+                    {item.reason}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            <p className="text-muted" style={{ margin: 0, fontSize: 12.5 }}>
+              Public videos with CC should work. Private videos, or captions
+              only available after login in the browser, often cannot be read
+              by the server.
+            </p>
+          </div>
+        ) : null}
+        {history[0]?.detail?.errors &&
+        history[0].detail.errors.length > 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              padding: "13.2px 17.6px",
+              borderRadius: 20,
+              background: "var(--color-accent-100)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--color-accent-800)",
+              }}
+            >
+              Last run — extract errors
+            </div>
+            {history[0].detail.errors.slice(0, 5).map((e, i) => (
+              <div key={e.videoId ?? i} style={{ fontSize: 13 }}>
+                {e.videoId ? `${e.videoId}: ` : ""}
+                {e.message}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
