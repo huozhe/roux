@@ -36,8 +36,9 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 | --- | --- |
 | M0–M1 | Scaffold, Organic, login, types/fixtures/helpers |
 | Wave 2 | T1 auth+Drizzle · T3 Claude extract · T6 library · T7 recipe/cook · T8 share/export/settings |
-| T4 | YouTube playlists API + Settings picker (fixtures without OAuth) |
-| Next | T5 sync/cron · wire fixtures → live API (M3–M4) |
+| T4 | YouTube playlists API + Settings picker |
+| T5 | Sync pipeline, cron, live recipes API, Sync page, live data adapter |
+| Next | Set `ANTHROPIC_API_KEY` · run Sync now · polish / T9 |
 
 ### Try locally
 
