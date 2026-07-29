@@ -150,22 +150,45 @@ async function main(): Promise<void> {
   const detail = result.detail as {
     needTranscript?: Array<{ title?: string; videoId?: string; reason?: string }>;
     errors?: Array<{ message?: string; videoId?: string }>;
+    maxNewVideos?: number;
   } | null;
 
-  if (detail?.needTranscript?.length) {
-    console.log("\nNo transcript:");
-    for (const item of detail.needTranscript.slice(0, 15)) {
-      console.log(
-        `  - ${item.title ?? item.videoId ?? "?"}${item.reason ? `  [${item.reason}]` : ""}`,
-      );
+  const nt = detail?.needTranscript ?? [];
+  const errs = detail?.errors ?? [];
+  if (nt.length || errs.length) {
+    const loginN = nt.filter((t) => /LOGIN_REQUIRED/i.test(t.reason ?? "")).length;
+    const goneN = nt.filter((t) =>
+      /unavailable|deleted/i.test(t.reason ?? ""),
+    ).length;
+    console.log("\nSkip breakdown:");
+    console.log(`  no transcript:     ${nt.length}`);
+    if (loginN) console.log(`    LOGIN_REQUIRED:  ${loginN}  (cookies / IP block, not Anthropic rate limit)`);
+    if (goneN) console.log(`    deleted/unavail: ${goneN}`);
+    console.log(`  extract errors:    ${errs.length}`);
+    if (detail?.maxNewVideos != null) {
+      console.log(`  max new (writes):  ${detail.maxNewVideos}`);
+    }
+  }
+
+  if (nt.length) {
+    console.log("\nNo transcript (first 15):");
+    for (const item of nt.slice(0, 15)) {
+      console.log(`  - ${item.title ?? item.videoId ?? "?"}`);
+      console.log(`    ${item.reason ?? "?"}`);
       if (item.videoId) {
         console.log(`    https://www.youtube.com/watch?v=${item.videoId}`);
       }
     }
+    if (loginNHint(nt)) {
+      console.log(
+        "\nTip: set YOUTUBE_COOKIES in .env.local to a logged-in youtube.com Cookie header, then re-run.\n" +
+          "     Caption fails no longer burn --max budget; re-run will retry remaining videos.",
+      );
+    }
   }
-  if (detail?.errors?.length) {
+  if (errs.length) {
     console.log("\nExtract errors:");
-    for (const e of detail.errors.slice(0, 10)) {
+    for (const e of errs.slice(0, 15)) {
       console.log(`  - ${e.videoId ?? "?"}: ${e.message}`);
     }
   }
@@ -177,6 +200,12 @@ async function main(): Promise<void> {
   }
 
   process.exit(result.result === "error" || result.result === "quota hit" ? 1 : 0);
+}
+
+function loginNHint(
+  nt: Array<{ reason?: string }>,
+): boolean {
+  return nt.some((t) => /LOGIN_REQUIRED/i.test(t.reason ?? ""));
 }
 
 main().catch((err) => {

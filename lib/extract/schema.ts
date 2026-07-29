@@ -24,11 +24,43 @@ export const extractedRecipeSchema = z.object({
   confidence: z.enum(["high", "medium", "low"]),
 });
 
-/** Strip optional ```json fences then JSON.parse + Zod validate. */
-export function parseExtractedJson(raw: string): ExtractedRecipe {
+/** Pull outermost JSON object from model text (fences, leading prose, trailing junk). */
+export function extractJsonObject(raw: string): string {
   const trimmed = raw.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  const body = fenced ? fenced[1]!.trim() : trimmed;
-  const data: unknown = JSON.parse(body);
-  return extractedRecipeSchema.parse(data) as ExtractedRecipe;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  let body = (fenced ? fenced[1]! : trimmed).trim();
+
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    body = body.slice(start, end + 1);
+  }
+  return body;
+}
+
+export function formatParseError(err: unknown): string {
+  if (err instanceof z.ZodError) {
+    return err.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+/** Strip fences / prose then JSON.parse + Zod validate. */
+export function parseExtractedJson(raw: string): ExtractedRecipe {
+  const body = extractJsonObject(raw);
+  let data: unknown;
+  try {
+    data = JSON.parse(body);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid JSON: ${msg}`);
+  }
+  try {
+    return extractedRecipeSchema.parse(data) as ExtractedRecipe;
+  } catch (err) {
+    throw new Error(formatParseError(err));
+  }
 }

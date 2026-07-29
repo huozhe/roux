@@ -80,6 +80,12 @@ describe("parseExtractedJson", () => {
     assert.throws(() => parseExtractedJson("not json at all"));
   });
 
+  it("extracts JSON after prose preamble", () => {
+    const raw = "I need to analyze the captions.\n" + JSON.stringify(validFixture);
+    const r = parseExtractedJson(raw);
+    assert.equal(r.title, "Mapo Tofu");
+  });
+
   it("allows null optional fields", () => {
     const r = parseExtractedJson(
       JSON.stringify({

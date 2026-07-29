@@ -302,16 +302,15 @@ export async function runSyncForUser(
           videoId: item.videoId,
           title: videoTitle,
           playlistId: item.playlistId,
-          reason: transcript.reason,
+          reason: shortTranscriptReason(transcript.reason),
         });
         onProgress({
-          stage: `No transcript — skipped “${videoTitle}” (${transcript.reason})`,
+          stage: `No transcript — skipped “${videoTitle}” (${shortTranscriptReason(transcript.reason)})`,
           found,
           written,
           skipped,
         });
-        // Counts toward max so we don't spin on many caption-less videos forever
-        processedNew += 1;
+        // Do NOT count toward maxNew — caption failures shouldn't burn extract budget.
         continue;
       }
       const cues = transcript.cues;
@@ -406,13 +405,13 @@ export async function runSyncForUser(
         });
       } catch (err) {
         skipped += 1;
-        processedNew += 1;
+        processedNew += 1; // extract attempt burns Claude budget
         detail.errors.push({
           videoId: item.videoId,
-          message: err instanceof Error ? err.message : String(err),
+          message: formatSyncError(err),
         });
         onProgress({
-          stage: `Extract failed for “${item.title}”`,
+          stage: `Extract failed for “${videoTitle}”: ${formatSyncError(err).slice(0, 120)}`,
           found,
           written,
           skipped,
@@ -625,4 +624,28 @@ export async function getSyncStatusSummary(userId: string): Promise<{
     unverifiedCount: unverified?.n ?? 0,
     needTranscriptCount,
   };
+}
+
+/** Compact caption failure for logs/UI (full dump is huge). */
+export function shortTranscriptReason(reason: string): string {
+  if (/LOGIN_REQUIRED/i.test(reason)) {
+    return "LOGIN_REQUIRED (YouTube blocked anonymous captions — set YOUTUBE_COOKIES or retry later)";
+  }
+  if (/no longer available|terminated|Video unavailable/i.test(reason)) {
+    return "video unavailable / deleted";
+  }
+  if (/no caption tracks/i.test(reason)) {
+    return "no caption tracks";
+  }
+  return reason.length > 180 ? `${reason.slice(0, 180)}…` : reason;
+}
+
+export function formatSyncError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }

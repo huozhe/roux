@@ -6,7 +6,13 @@ export type CaptionCue = {
 
 export const SYSTEM_PROMPT = `You extract structured cooking recipes from YouTube video captions.
 
-Return ONLY a single JSON object (no markdown, no commentary) with this shape:
+CRITICAL OUTPUT RULES:
+- Return ONLY one JSON object. No markdown fences, no preamble ("I need to…"), no trailing notes.
+- ingredients and steps MUST each be non-empty arrays (≥1 item). Never return [].
+- If the captions are sparse, still produce a best-effort recipe with confidence "low" and inferred quantities.
+- If this is clearly NOT a cooking video, still return JSON with title from the video, one placeholder ingredient/step, confidence "low" — never prose.
+
+Shape:
 {
   "title": string,
   "cuisine": string | null,
@@ -27,9 +33,10 @@ Return ONLY a single JSON object (no markdown, no commentary) with this shape:
 
 ## Title & meta
 - title: short, human recipe name — strip clickbait, ALL CAPS hype, "REAL", emojis, "you won't believe".
-- cuisine / main_ingredient: set when reasonably clear, else null. Prefer labels like Sichuan, Chinese, Japanese, Korean, Thai, Indian, Italian, French, Mexican, American and mains Beef, Pork, Chicken, Seafood, Tofu, Vegetable, Noodles.
+- cuisine / main_ingredient: set when reasonably clear, else null. Prefer labels like Sichuan, Chinese, Japanese, Korean, Thai, Indian, Italian, French, Mexican, American and mains Beef, Pork, Chicken, Seafood, Tofu, Vegetable, Noodles. You may use other clear labels (e.g. Middle Eastern, Lamb).
 - cook_minutes / servings: from captions when stated or clearly implied.
 - confidence: high = clear quantities + ordered steps; medium = some gaps/inferred; low = sparse or ambiguous transcript.
+- Captions may be Chinese, Japanese, or mixed; extract recipe content in English when practical, keep standard ingredient names accurate.
 
 ## Ingredients (professional culinary format)
 Write the ingredient list as a chef or recipe editor would for a published cookbook or line kitchen:
@@ -99,8 +106,9 @@ export function buildRetryPrompt(
   return `Your previous response failed validation:
 ${errorMessage}
 
-Previous response:
-${previousRaw}
+Previous response (may be truncated):
+${previousRaw.slice(0, 6000)}
 
-Fix it: return ONLY valid JSON matching the schema (no markdown fences). Every ingredient must include qty, name, inferred, and group.`;
+Respond with ONLY a valid JSON object (start with { end with }). No prose.
+Rules: ingredients.length >= 1, steps.length >= 1, each ingredient has qty, name, inferred, group; each step has text and t_seconds. Prefer compact JSON if the previous reply was truncated.`;
 }

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedRecipe } from "@/lib/types";
-import { parseExtractedJson } from "./schema";
+import { formatParseError, parseExtractedJson } from "./schema";
 import {
   SYSTEM_PROMPT,
   buildRetryPrompt,
@@ -18,6 +18,8 @@ export type ExtractOpts = {
 };
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
+/** Long Chinese cooking videos can produce large JSON; 4k was truncating. */
+const MAX_TOKENS = 8192;
 
 function textFromMessage(msg: Anthropic.Message): string {
   return msg.content
@@ -30,19 +32,22 @@ async function callClaude(
   client: Anthropic,
   model: string,
   userContent: string,
-): Promise<string> {
+): Promise<{ text: string; truncated: boolean }> {
   const msg = await client.messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userContent }],
   });
-  return textFromMessage(msg);
+  return {
+    text: textFromMessage(msg),
+    truncated: msg.stop_reason === "max_tokens",
+  };
 }
 
 /**
  * Extract a structured recipe from timed caption cues via Claude.
- * Retries once if the response is invalid JSON or fails schema validation.
+ * Retries up to 2x on invalid JSON / schema / truncation.
  */
 export async function extractRecipe(
   cues: CaptionCue[],
@@ -54,21 +59,41 @@ export async function extractRecipe(
 
   const client = opts?.client ?? new Anthropic();
   const model = opts?.model ?? DEFAULT_MODEL;
-  const userPrompt = buildUserPrompt(cues, { videoTitle: opts?.videoTitle });
+  let userPrompt = buildUserPrompt(cues, { videoTitle: opts?.videoTitle });
 
-  const first = await callClaude(client, model, userPrompt);
-  try {
-    return parseExtractedJson(first);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const second = await callClaude(
-      client,
-      model,
-      buildRetryPrompt(first, message),
-    );
-    return parseExtractedJson(second);
+  let lastError = "unknown";
+  let lastRaw = "";
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { text, truncated } = await callClaude(client, model, userPrompt);
+    lastRaw = text;
+    if (truncated) {
+      lastError = "Response truncated (max_tokens); need shorter recipe JSON";
+      userPrompt = buildRetryPrompt(
+        text.slice(0, 4000),
+        lastError +
+          ". Return compact JSON: fewer ingredient lines if needed, still ≥1 ingredient and ≥1 step, under 10 steps.",
+      );
+      continue;
+    }
+    try {
+      return parseExtractedJson(text);
+    } catch (err) {
+      lastError = formatParseError(err);
+      userPrompt = buildRetryPrompt(text, lastError);
+    }
   }
+
+  throw new Error(
+    `extractRecipe failed after retries: ${lastError}` +
+      (lastRaw ? ` | raw=${lastRaw.slice(0, 180).replace(/\s+/g, " ")}` : ""),
+  );
 }
 
-export { parseExtractedJson, extractedRecipeSchema } from "./schema";
+export {
+  parseExtractedJson,
+  extractJsonObject,
+  formatParseError,
+  extractedRecipeSchema,
+} from "./schema";
 export { SYSTEM_PROMPT, buildUserPrompt, formatCues } from "./prompt";
