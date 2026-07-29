@@ -1,33 +1,27 @@
-# Session State - Roux custom chips ship
+# Session State - Roux category learn ship
 
 **Date**: 2026-07-29
 
 ## Current Objective
-Ship private YouTube cooking playlist → searchable recipe library (v1). M4 + prefs + custom category chips shipped; next T9 polish + manual E2E.
+Ship private YouTube cooking playlist → searchable recipe library (v1). Category auto-learn shipped; next T9 polish + manual E2E.
 
 ## Next Concrete Step
-Manual E2E: Settings categories → library filter chips show customs; prefs layout/timestamps/shelf. Then T9 mobile/empty/error polish.
+Manual E2E: open Settings (backfill tags from recipes) → library chips; `npm run sync` new video → novel cuisine/main land in prefs. Then T9.
 
 ## Key Context to Load
 - Plan: `docs/plans/v1-implementation.md` (M4 done; T9 open)
-- Spec: `prototype/HANDOFF.md`
-- Prod: https://roux-green.vercel.app · GH: huozhe/roux
-- Prefs: `useLivePrefs` + `resolveAppUserId`; chips via `categoryOptions(CUISINES|MAINS, custom*)`
-- Sync local-only (`npm run sync`); extract Claude sonnet-4-6
-- Audit: `scripts/audit-prod-data.ts`
+- Prod: https://roux-green.vercel.app
+- LLM free-picks cuisine/main; `learnCategoriesFromLabels` saves novel ones to prefs
+- Library chips: base + prefs + recipe labels; Settings backfill: `learnCategoriesFromUserRecipes`
+- Sync local-only; extract Claude sonnet-4-6
 
 ## Important Decisions & Invariants
-- No YouTube cookies on Vercel; notes/verified never on public share
-- Never overwrite verified recipes on re-extract
-- Session user.id = app UUID (not Google sub)
-- Schema: Postgres `roux`
-
-## Open Risks / Things to Watch
-- Transcript fetch fails from Vercel IPs → local sync
-- Custom category only filters if recipes use matching cuisine/main strings
+- Customs not sent into extract prompt — accumulate model output
+- Session user.id = app UUID; notes/verified never on public share
+- No YouTube cookies on Vercel
 
 ## Verification
 ```bash
 npm test && npx tsc --noEmit
-# Settings add cuisine → Library filter row includes it
+# Settings → categories include recipe tags; library chips match
 ```
