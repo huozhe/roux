@@ -42,6 +42,8 @@ export type SyncDetail = {
     title: string;
     playlistId: string;
     reason?: string;
+    /** no_captions | auth_blocked | unavailable | empty_body | captcha | unknown */
+    kind?: string;
   }>;
   errors: Array<{ videoId?: string; message: string }>;
   maxNewVideos: number;
@@ -298,14 +300,16 @@ export async function runSyncForUser(
       const transcript = await fetchTranscriptDetailed(item.videoId);
       if (!transcript.ok) {
         skipped += 1;
+        const short = shortTranscriptReason(transcript.kind, transcript.reason);
         detail.needTranscript.push({
           videoId: item.videoId,
           title: videoTitle,
           playlistId: item.playlistId,
-          reason: shortTranscriptReason(transcript.reason),
+          reason: short,
+          kind: transcript.kind,
         });
         onProgress({
-          stage: `No transcript — skipped “${videoTitle}” (${shortTranscriptReason(transcript.reason)})`,
+          stage: `No transcript — skipped “${videoTitle}” (${short})`,
           found,
           written,
           skipped,
@@ -627,15 +631,34 @@ export async function getSyncStatusSummary(userId: string): Promise<{
 }
 
 /** Compact caption failure for logs/UI (full dump is huge). */
-export function shortTranscriptReason(reason: string): string {
-  if (/LOGIN_REQUIRED/i.test(reason)) {
-    return "LOGIN_REQUIRED (YouTube blocked anonymous captions — set YOUTUBE_COOKIES or retry later)";
+export function shortTranscriptReason(
+  kind: string | undefined,
+  reason: string,
+): string {
+  if (kind === "no_captions") {
+    return "no captions (uploader has none / ASR off)";
+  }
+  if (kind === "auth_blocked") {
+    return "auth blocked (LOGIN_REQUIRED — cookies/IP; not “no captions”)";
+  }
+  if (kind === "unavailable") {
+    return "video unavailable / deleted";
+  }
+  if (kind === "captcha") {
+    return "captcha required";
+  }
+  if (kind === "empty_body") {
+    return "caption tracks listed but body empty";
+  }
+  // Legacy strings without kind
+  if (/no caption tracks/i.test(reason) && !/LOGIN_REQUIRED\b/.test(reason)) {
+    return "no captions (uploader has none / ASR off)";
+  }
+  if (/\bLOGIN_REQUIRED\b/.test(reason) && !/or captions off/i.test(reason)) {
+    return "auth blocked (LOGIN_REQUIRED — cookies/IP)";
   }
   if (/no longer available|terminated|Video unavailable/i.test(reason)) {
     return "video unavailable / deleted";
-  }
-  if (/no caption tracks/i.test(reason)) {
-    return "no caption tracks";
   }
   return reason.length > 180 ? `${reason.slice(0, 180)}…` : reason;
 }

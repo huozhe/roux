@@ -148,7 +148,12 @@ async function main(): Promise<void> {
   console.log(`  skipped: ${result.skipped}`);
 
   const detail = result.detail as {
-    needTranscript?: Array<{ title?: string; videoId?: string; reason?: string }>;
+    needTranscript?: Array<{
+      title?: string;
+      videoId?: string;
+      reason?: string;
+      kind?: string;
+    }>;
     errors?: Array<{ message?: string; videoId?: string }>;
     maxNewVideos?: number;
   } | null;
@@ -156,17 +161,35 @@ async function main(): Promise<void> {
   const nt = detail?.needTranscript ?? [];
   const errs = detail?.errors ?? [];
   if (nt.length || errs.length) {
-    const loginN = nt.filter((t) => /LOGIN_REQUIRED/i.test(t.reason ?? "")).length;
-    const goneN = nt.filter((t) =>
-      /unavailable|deleted/i.test(t.reason ?? ""),
-    ).length;
+    const byKind = (k: string) =>
+      nt.filter(
+        (t) =>
+          t.kind === k ||
+          (k === "no_captions" && /no captions/i.test(t.reason ?? "")) ||
+          (k === "auth_blocked" &&
+            /auth blocked|LOGIN_REQUIRED/i.test(t.reason ?? "") &&
+            !/no captions/i.test(t.reason ?? "")) ||
+          (k === "unavailable" && /unavailable|deleted/i.test(t.reason ?? "")),
+      ).length;
+    const noneN = byKind("no_captions");
+    const authN = byKind("auth_blocked");
+    const goneN = byKind("unavailable");
+    const emptyN = byKind("empty_body");
     console.log("\nSkip breakdown:");
-    console.log(`  no transcript:     ${nt.length}`);
-    if (loginN) console.log(`    LOGIN_REQUIRED:  ${loginN}  (cookies / IP block, not Anthropic rate limit)`);
-    if (goneN) console.log(`    deleted/unavail: ${goneN}`);
-    console.log(`  extract errors:    ${errs.length}`);
+    console.log(`  no transcript total: ${nt.length}`);
+    if (noneN)
+      console.log(
+        `    no captions:       ${noneN}  (playable video; uploader disabled / no ASR — not a block)`,
+      );
+    if (authN)
+      console.log(
+        `    auth blocked:      ${authN}  (LOGIN_REQUIRED / cookies-IP — not “no captions”)`,
+      );
+    if (goneN) console.log(`    deleted/unavail:   ${goneN}`);
+    if (emptyN) console.log(`    empty caption body:${emptyN}`);
+    console.log(`  extract errors:      ${errs.length}`);
     if (detail?.maxNewVideos != null) {
-      console.log(`  max new (writes):  ${detail.maxNewVideos}`);
+      console.log(`  max new (writes):    ${detail.maxNewVideos}`);
     }
   }
 
@@ -174,15 +197,21 @@ async function main(): Promise<void> {
     console.log("\nNo transcript (first 15):");
     for (const item of nt.slice(0, 15)) {
       console.log(`  - ${item.title ?? item.videoId ?? "?"}`);
-      console.log(`    ${item.reason ?? "?"}`);
+      console.log(
+        `    [${item.kind ?? "?"}] ${item.reason ?? "?"}`,
+      );
       if (item.videoId) {
         console.log(`    https://www.youtube.com/watch?v=${item.videoId}`);
       }
     }
-    if (loginNHint(nt)) {
+    if (nt.some((t) => t.kind === "auth_blocked")) {
       console.log(
-        "\nTip: set YOUTUBE_COOKIES in .env.local to a logged-in youtube.com Cookie header, then re-run.\n" +
-          "     Caption fails no longer burn --max budget; re-run will retry remaining videos.",
+        "\nTip: auth_blocked → set/refresh YOUTUBE_COOKIES in .env.local (logged-in youtube.com Cookie header).",
+      );
+    }
+    if (nt.some((t) => t.kind === "no_captions")) {
+      console.log(
+        "Tip: no_captions → video has no CC/ASR; Roux cannot invent a transcript. Skip or add captions on YouTube.",
       );
     }
   }
@@ -202,11 +231,7 @@ async function main(): Promise<void> {
   process.exit(result.result === "error" || result.result === "quota hit" ? 1 : 0);
 }
 
-function loginNHint(
-  nt: Array<{ reason?: string }>,
-): boolean {
-  return nt.some((t) => /LOGIN_REQUIRED/i.test(t.reason ?? ""));
-}
+
 
 main().catch((err) => {
   console.error(err instanceof Error ? err.message : err);

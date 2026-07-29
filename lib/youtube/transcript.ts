@@ -431,6 +431,76 @@ async function downloadTrack(
   return null;
 }
 
+export type TranscriptFailKind =
+  /** Playable video, uploader has no captions / ASR. */
+  | "no_captions"
+  /** YouTube requires login / bot check for this IP or session. */
+  | "auth_blocked"
+  /** Deleted, private, terminated, unplayable. */
+  | "unavailable"
+  | "captcha"
+  /** Tracks listed but timedtext body empty. */
+  | "empty_body"
+  | "unknown";
+
+export type TranscriptResult =
+  | { ok: true; cues: CaptionCue[] }
+  | { ok: false; reason: string; kind: TranscriptFailKind };
+
+type FailAttempt = { kind: TranscriptFailKind; reason: string };
+
+function fail(
+  kind: TranscriptFailKind,
+  reason: string,
+): Extract<TranscriptResult, { ok: false }> {
+  return { ok: false, kind, reason };
+}
+
+function classifyPlayability(
+  status: string | undefined,
+  playReason: string | undefined,
+  via: string,
+): FailAttempt | null {
+  const st = status ?? "OK";
+  const pr = playReason ?? "";
+  if (st === "LOGIN_REQUIRED" || /sign in to confirm/i.test(pr)) {
+    return {
+      kind: "auth_blocked",
+      reason: `${via}: LOGIN_REQUIRED${pr ? ` (${pr})` : ""}`,
+    };
+  }
+  if (st === "UNPLAYABLE" && /sign in/i.test(pr)) {
+    return {
+      kind: "auth_blocked",
+      reason: `${via}: UNPLAYABLE sign-in${pr ? ` (${pr})` : ""}`,
+    };
+  }
+  if (st && st !== "OK") {
+    return {
+      kind: "unavailable",
+      reason: `${via}: video ${st}${pr ? ` (${pr})` : ""}`,
+    };
+  }
+  return null;
+}
+
+/** Prefer concrete outcomes: unavailable > no_captions > empty_body > auth > unknown. */
+function pickFinalFail(attempts: FailAttempt[]): FailAttempt {
+  const order: TranscriptFailKind[] = [
+    "unavailable",
+    "no_captions",
+    "empty_body",
+    "captcha",
+    "auth_blocked",
+    "unknown",
+  ];
+  for (const kind of order) {
+    const hit = attempts.find((a) => a.kind === kind);
+    if (hit) return hit;
+  }
+  return attempts[0] ?? { kind: "unknown", reason: "unknown caption failure" };
+}
+
 async function cuesFromPlayer(
   player: PlayerResponse,
   videoId: string,
@@ -438,20 +508,15 @@ async function cuesFromPlayer(
   via: string,
 ): Promise<TranscriptResult> {
   const status = player.playabilityStatus?.status;
-  if (status && status !== "OK") {
-    return {
-      ok: false,
-      reason: `${via}: video ${status}${player.playabilityStatus?.reason ? ` (${player.playabilityStatus.reason})` : ""}`,
-    };
-  }
+  const playReason = player.playabilityStatus?.reason;
+  const blocked = classifyPlayability(status, playReason, via);
+  if (blocked) return fail(blocked.kind, blocked.reason);
 
   const tracks =
     player.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
   if (!tracks.length) {
-    return {
-      ok: false,
-      reason: `${via}: no caption tracks (LOGIN_REQUIRED or captions off)`,
-    };
+    // Playable (status OK) but no tracks = legitimately no captions — not auth.
+    return fail("no_captions", `${via}: no caption tracks`);
   }
 
   const ranked = rankTracks(tracks);
@@ -464,15 +529,11 @@ async function cuesFromPlayer(
     if (cues?.length) return { ok: true, cues };
   }
 
-  return {
-    ok: false,
-    reason: `${via}: caption body empty (tracks: ${tried.join(", ")})`,
-  };
+  return fail(
+    "empty_body",
+    `${via}: caption body empty (tracks: ${tried.join(", ")})`,
+  );
 }
-
-export type TranscriptResult =
-  | { ok: true; cues: CaptionCue[] }
-  | { ok: false; reason: string };
 
 /**
  * Detailed fetch for sync diagnostics.
@@ -482,20 +543,23 @@ export async function fetchTranscriptDetailed(
   opts?: TranscriptFetchOpts,
 ): Promise<TranscriptResult> {
   if (!videoId || !/^[\w-]{6,}$/.test(videoId)) {
-    return { ok: false, reason: "invalid video id" };
+    return fail("unknown", "invalid video id");
   }
 
   const cookies = resolveCookies(opts);
   const hasUserCookies = Boolean(
     opts?.cookies?.trim() || process.env.YOUTUBE_COOKIES?.trim(),
   );
-  const attempts: string[] = [];
+  const fails: FailAttempt[] = [];
 
   // Innertube ANDROID/IOS with consent (and optional user cookies)
   for (const client of CLIENTS) {
     const attempt = await fetchPlayerInnertube(videoId, client, cookies);
     if (!attempt.ok) {
-      attempts.push(`${attempt.via}: ${attempt.error}`);
+      fails.push({
+        kind: "unknown",
+        reason: `${attempt.via}: ${attempt.error}`,
+      });
       continue;
     }
     const result = await cuesFromPlayer(
@@ -505,14 +569,12 @@ export async function fetchTranscriptDetailed(
       attempt.via,
     );
     if (result.ok) return result;
-    attempts.push(result.reason);
+    fails.push({ kind: result.kind, reason: result.reason });
   }
 
-  // Watch-page scrape (can still list tracks when innertube says LOGIN_REQUIRED)
+  // Watch-page scrape (can still list tracks when innertube is auth-blocked)
   const htmlAttempt = await fetchPlayerFromWatchPage(videoId, cookies);
   if (htmlAttempt.ok) {
-    // Prefer timedtext download using ANDROID-style UA; HTML-signed URLs often empty,
-    // but still try. If we only have HTML tracks, try each.
     const result = await cuesFromPlayer(
       htmlAttempt.player,
       videoId,
@@ -520,30 +582,50 @@ export async function fetchTranscriptDetailed(
       htmlAttempt.via,
     );
     if (result.ok) return result;
-    attempts.push(result.reason);
+    fails.push({ kind: result.kind, reason: result.reason });
   } else {
-    attempts.push(`${htmlAttempt.via}: ${htmlAttempt.error}`);
+    const err = htmlAttempt.error;
+    fails.push({
+      kind: /captcha/i.test(err) ? "captcha" : "unknown",
+      reason: `${htmlAttempt.via}: ${err}`,
+    });
   }
 
-  const loginRequired = attempts.some((a) =>
-    /LOGIN_REQUIRED|Sign in to confirm/i.test(a),
+  const final = pickFinalFail(fails);
+
+  // Only claim auth block when playability said so AND we lack user cookies
+  // (or even with cookies if still LOGIN_REQUIRED).
+  if (final.kind === "auth_blocked" && !hasUserCookies) {
+    return fail(
+      "auth_blocked",
+      "YouTube blocked anonymous caption access (LOGIN_REQUIRED). " +
+        "Set YOUTUBE_COOKIES to a logged-in youtube.com Cookie header. " +
+        `Details: ${fails
+          .filter((f) => f.kind === "auth_blocked")
+          .map((f) => f.reason)
+          .slice(0, 2)
+          .join(" · ")}`,
+    );
+  }
+
+  if (final.kind === "no_captions") {
+    return fail(
+      "no_captions",
+      "No captions on this video (playable; uploader disabled captions / no ASR)",
+    );
+  }
+
+  if (final.kind === "unavailable") {
+    return fail("unavailable", final.reason);
+  }
+
+  return fail(
+    final.kind,
+    `${final.reason}${fails.length > 1 ? ` · also: ${fails
+      .slice(0, 3)
+      .map((f) => f.kind)
+      .join(", ")}` : ""}`,
   );
-
-  if (loginRequired && !hasUserCookies) {
-    return {
-      ok: false,
-      reason:
-        "YouTube blocked anonymous caption access from this server (LOGIN_REQUIRED). " +
-        "Set env YOUTUBE_COOKIES to a browser cookie string from youtube.com while logged in " +
-        "(export with a cookies.txt extension, paste the Cookie header value). " +
-        `Details: ${attempts.slice(0, 3).join(" · ")}`,
-    };
-  }
-
-  return {
-    ok: false,
-    reason: `player/captions failed (${attempts.slice(0, 4).join(" · ")})`,
-  };
 }
 
 export async function fetchTranscriptCues(
