@@ -34,6 +34,13 @@ type Counters = {
   unverified: number | null;
 };
 
+type CaptionSkipItem = {
+  videoId: string;
+  title: string;
+  kind: string;
+  reason?: string | null;
+};
+
 function parseHistory(json: unknown): SyncRunRow[] {
   if (!json || typeof json !== "object") return [];
   const o = json as Record<string, unknown>;
@@ -116,15 +123,22 @@ export function SyncClient() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncStage, setSyncStage] = useState("");
+  const [captionSkips, setCaptionSkips] = useState<{
+    no_captions: CaptionSkipItem[];
+    auth_blocked: CaptionSkipItem[];
+  }>({ no_captions: [], auth_blocked: [] });
+  const [expandNoCaptions, setExpandNoCaptions] = useState(false);
+  const [expandAuthBlocked, setExpandAuthBlocked] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     let unauthorized = false;
 
-    const [plRes, histRes, statusRes] = await Promise.all([
+    const [plRes, histRes, statusRes, skipsRes] = await Promise.all([
       fetch("/api/playlists"),
       fetch("/api/sync/history"),
       fetch("/api/sync/status").catch(() => null),
+      fetch("/api/sync/caption-skips").catch(() => null),
     ]);
 
     if (plRes.status === 401 || histRes.status === 401) {
@@ -180,6 +194,19 @@ export function SyncClient() {
           addedThisMonth: null,
           needTranscript: null,
           unverified: null,
+        });
+      }
+
+      if (skipsRes?.ok) {
+        const data = (await skipsRes.json()) as {
+          groups?: {
+            no_captions?: CaptionSkipItem[];
+            auth_blocked?: CaptionSkipItem[];
+          };
+        };
+        setCaptionSkips({
+          no_captions: data.groups?.no_captions ?? [],
+          auth_blocked: data.groups?.auth_blocked ?? [],
         });
       }
     } catch (e) {
@@ -523,6 +550,21 @@ export function SyncClient() {
         </div>
       </div>
 
+      <CaptionSkipSection
+        title="No captions"
+        hint="Playable videos with no CC/ASR. Sync skips these automatically."
+        items={captionSkips.no_captions}
+        expanded={expandNoCaptions}
+        onToggle={() => setExpandNoCaptions((v) => !v)}
+      />
+      <CaptionSkipSection
+        title="Auth blocked"
+        hint="YouTube LOGIN_REQUIRED / cookie-IP blocks. Fix cookies then clear skips by re-sync after captions work — or leave skipped."
+        items={captionSkips.auth_blocked}
+        expanded={expandAuthBlocked}
+        onToggle={() => setExpandAuthBlocked((v) => !v)}
+      />
+
       <div className="card" style={{ padding: 22, gap: "13.2px" }}>
         <h4 style={{ margin: 0 }}>History</h4>
         <div style={{ overflowX: "auto" }}>
@@ -569,59 +611,6 @@ export function SyncClient() {
             </tbody>
           </table>
         </div>
-        {history[0]?.detail?.needTranscript &&
-        history[0].detail.needTranscript.length > 0 ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              padding: "13.2px 17.6px",
-              borderRadius: 20,
-              background: "var(--color-bg)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--color-neutral-600)",
-              }}
-            >
-              Last run — no transcript
-            </div>
-            {history[0].detail.needTranscript.slice(0, 8).map((item, i) => (
-              <div key={item.videoId ?? i} style={{ fontSize: 13.5 }}>
-                <strong>{item.title ?? item.videoId ?? "Video"}</strong>
-                {item.videoId ? (
-                  <>
-                    {" "}
-                    <a
-                      href={`https://www.youtube.com/watch?v=${item.videoId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ fontSize: 12.5 }}
-                    >
-                      open
-                    </a>
-                  </>
-                ) : null}
-                {item.reason ? (
-                  <div className="text-muted" style={{ fontSize: 12.5 }}>
-                    {item.reason}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-            <p className="text-muted" style={{ margin: 0, fontSize: 12.5 }}>
-              If you see LOGIN_REQUIRED, YouTube is blocking this server IP.
-              Set Vercel env <code>YOUTUBE_COOKIES</code> to your browser Cookie
-              header from youtube.com (while signed in), redeploy, then sync
-              again. Private videos still may not work.
-            </p>
-          </div>
-        ) : null}
         {history[0]?.detail?.errors &&
         history[0].detail.errors.length > 0 ? (
           <div
@@ -653,6 +642,95 @@ export function SyncClient() {
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function CaptionSkipSection({
+  title,
+  hint,
+  items,
+  expanded,
+  onToggle,
+}: {
+  title: string;
+  hint: string;
+  items: CaptionSkipItem[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="card" style={{ padding: 22, gap: "13.2px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <h4 style={{ margin: 0 }}>{title}</h4>
+        <span className="tag tag-neutral">{items.length}</span>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{
+            marginLeft: "auto",
+            fontFamily: "var(--font-body)",
+            fontSize: 13,
+          }}
+          onClick={onToggle}
+          disabled={items.length === 0}
+        >
+          {items.length === 0
+            ? "None"
+            : expanded
+              ? "Collapse"
+              : "Expand list"}
+        </button>
+      </div>
+      <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
+        {hint}
+      </p>
+      {expanded && items.length > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxHeight: 360,
+            overflowY: "auto",
+          }}
+        >
+          {items.map((item) => (
+            <div
+              key={item.videoId}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                padding: "10px 13.2px",
+                borderRadius: 16,
+                background: "var(--color-bg)",
+              }}
+            >
+              <a
+                href={`https://www.youtube.com/watch?v=${item.videoId}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 14, fontWeight: 600 }}
+              >
+                {item.title || item.videoId}
+              </a>
+              {item.reason ? (
+                <span className="text-muted" style={{ fontSize: 12.5 }}>
+                  {item.reason}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

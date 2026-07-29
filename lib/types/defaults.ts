@@ -4,4 +4,5 @@ export const DEFAULT_PREFS: UserPrefs = {
   layout: "single",
   timestamps: true,
   newShelf: false,
+  syncMarkVerified: false,
 };

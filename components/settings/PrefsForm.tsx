@@ -42,6 +42,7 @@ export function PrefsForm({
           layout: next.layout,
           timestamps: next.timestamps,
           newShelf: next.newShelf,
+          syncMarkVerified: next.syncMarkVerified,
         }),
       });
       if (!res.ok) {
@@ -131,6 +132,34 @@ export function PrefsForm({
             <span>Hide</span>
           </label>
         </div>
+      </div>
+
+      <div className="field">
+        <label>New recipes from sync</label>
+        <div className="seg">
+          <label className="seg-opt">
+            <input
+              type="radio"
+              name="prefsyncver"
+              checked={!prefs.syncMarkVerified}
+              onChange={() => update({ syncMarkVerified: false })}
+            />
+            <span>Pending verification</span>
+          </label>
+          <label className="seg-opt">
+            <input
+              type="radio"
+              name="prefsyncver"
+              checked={prefs.syncMarkVerified}
+              onChange={() => update({ syncMarkVerified: true })}
+            />
+            <span>Mark verified</span>
+          </label>
+        </div>
+        <p className="text-muted" style={{ margin: "6px 0 0", fontSize: 12.5 }}>
+          Verified recipes are never overwritten by a later sync. Pending ones
+          may be re-written until you mark them verified.
+        </p>
       </div>
 
       <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>

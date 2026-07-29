@@ -31,7 +31,7 @@ export const users = roux.table("users", {
     .$type<UserPrefs>()
     .notNull()
     .default(
-      sql`'{"layout":"single","timestamps":true,"newShelf":false}'::jsonb`,
+      sql`'{"layout":"single","timestamps":true,"newShelf":false,"syncMarkVerified":false}'::jsonb`,
     ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -141,6 +141,35 @@ export const recipeTombstones = roux.table(
   (t) => [primaryKey({ columns: [t.userId, t.videoId] })],
 );
 
+/**
+ * Videos that cannot be extracted yet (no captions / auth-blocked).
+ * Sync skips these automatically until the row is removed.
+ */
+export const captionSkips = roux.table(
+  "caption_skips",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    title: text("title").notNull().default(""),
+    /** no_captions | auth_blocked */
+    kind: text("kind").notNull(),
+    reason: text("reason"),
+    playlistId: text("playlist_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.videoId] }),
+    index("caption_skips_user_kind_idx").on(t.userId, t.kind),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type PlaylistRow = typeof playlists.$inferSelect;
@@ -148,3 +177,4 @@ export type RecipeRow = typeof recipes.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type RecipeTombstone = typeof recipeTombstones.$inferSelect;
+export type CaptionSkip = typeof captionSkips.$inferSelect;

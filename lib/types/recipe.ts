@@ -48,6 +48,11 @@ export type UserPrefs = {
   layout: RecipeLayout;
   timestamps: boolean;
   newShelf: boolean;
+  /**
+   * When true, newly written-up recipes are verified (sync will not re-extract).
+   * When false, they stay pending verification (default).
+   */
+  syncMarkVerified: boolean;
   customCuisines?: string[];
   customMains?: string[];
 };

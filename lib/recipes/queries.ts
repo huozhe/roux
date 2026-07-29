@@ -514,6 +514,7 @@ function asUserPrefs(v: unknown): UserPrefs {
     layout: o.layout === "split" ? "split" : "single",
     timestamps: o.timestamps !== false,
     newShelf: Boolean(o.newShelf),
+    syncMarkVerified: Boolean(o.syncMarkVerified),
     ...(Array.isArray(o.customCuisines)
       ? { customCuisines: o.customCuisines.filter((s) => typeof s === "string") }
       : {}),
@@ -543,6 +544,10 @@ export async function updateUserPrefs(
     timestamps:
       patch.timestamps !== undefined ? patch.timestamps : current.timestamps,
     newShelf: patch.newShelf !== undefined ? patch.newShelf : current.newShelf,
+    syncMarkVerified:
+      patch.syncMarkVerified !== undefined
+        ? patch.syncMarkVerified
+        : current.syncMarkVerified,
   };
   if (patch.customCuisines !== undefined) {
     next.customCuisines = patch.customCuisines;

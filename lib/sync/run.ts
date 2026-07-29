@@ -12,7 +12,14 @@ import {
 } from "@/lib/db";
 import { learnCategoriesFromLabels } from "@/lib/recipes/queries";
 import type { Confidence, Ingredient, Step } from "@/lib/types";
+import {
+  isCaptionSkipKind,
+  listCaptionSkips,
+  listCaptionSkipVideoIds,
+  upsertCaptionSkip,
+} from "@/lib/sync/caption-skips";
 import { canWriteExtract, shouldSkipVideo } from "@/lib/sync/decisions";
+import { getUserPrefs } from "@/lib/recipes/queries";
 import {
   listPlaylistItems,
   type PlaylistItem,
@@ -164,6 +171,8 @@ export async function runSyncForUser(
     detail.playlists = selected.map((p) => p.id);
 
     const accessToken = await getAccessTokenForUser(userId);
+    const userPrefs = await getUserPrefs(userId);
+    const markVerified = userPrefs.syncMarkVerified === true;
 
     // Known recipes + tombstones for skip / re-extract decisions
     const existingRows = await db
@@ -183,6 +192,7 @@ export async function runSyncForUser(
       .where(eq(recipeTombstones.userId, userId));
 
     const tombstoneSet = new Set(tombstoneRows.map((t) => t.videoId));
+    const captionSkipSet = await listCaptionSkipVideoIds(userId);
     const existingByVideo = new Map(
       existingRows.map((r) => [r.videoId, r] as const),
     );
@@ -221,6 +231,9 @@ export async function runSyncForUser(
         ) {
           continue;
         }
+
+        // Known no_captions / auth_blocked — do not re-fetch every run
+        if (captionSkipSet.has(item.videoId)) continue;
 
         // Already have a library row — only re-extract if unverified
         if (existing && canWriteExtract(existing) === "skip") continue;
@@ -308,6 +321,18 @@ export async function runSyncForUser(
           reason: short,
           kind: transcript.kind,
         });
+        if (isCaptionSkipKind(transcript.kind)) {
+          await upsertCaptionSkip(userId, {
+            videoId: item.videoId,
+            title: videoTitle,
+            kind: transcript.kind,
+            reason: short,
+            playlistId: item.playlistId,
+          }).catch(() => {
+            /* non-fatal */
+          });
+          captionSkipSet.add(item.videoId);
+        }
         onProgress({
           stage: `No transcript — skipped “${videoTitle}” (${short})`,
           found,
@@ -354,14 +379,14 @@ export async function runSyncForUser(
             ingredients,
             steps,
             confidence,
-            verified: false,
+            verified: markVerified,
             videoStatus: "ok",
             uploadedAt,
             addedAt,
             writtenAt: new Date(),
           });
         } else if (existing) {
-          // update unverified only
+          // update unverified only; may flip to verified per prefs
           await db
             .update(recipes)
             .set({
@@ -378,6 +403,7 @@ export async function runSyncForUser(
               ingredients,
               steps,
               confidence,
+              verified: markVerified,
               videoStatus: "ok",
               uploadedAt: uploadedAt ?? undefined,
               writtenAt: new Date(),
@@ -403,7 +429,7 @@ export async function runSyncForUser(
         existingByVideo.set(item.videoId, {
           id: existing?.id ?? "",
           videoId: item.videoId,
-          verified: false,
+          verified: markVerified,
           archivedAt: null,
           videoStatus: "ok",
         });
@@ -613,9 +639,13 @@ export async function getSyncStatusSummary(userId: string): Promise<{
     );
 
   let needTranscriptCount = 0;
-  const detail = lastRun?.detail as SyncDetail | null;
-  if (detail?.needTranscript?.length) {
-    needTranscriptCount = detail.needTranscript.length;
+  try {
+    needTranscriptCount = (await listCaptionSkips(userId)).length;
+  } catch {
+    const detail = lastRun?.detail as SyncDetail | null;
+    if (detail?.needTranscript?.length) {
+      needTranscriptCount = detail.needTranscript.length;
+    }
   }
 
   return {

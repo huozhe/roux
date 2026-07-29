@@ -36,6 +36,10 @@ function parsePrefsPatch(body: unknown): Partial<UserPrefs> | null {
     if (typeof b.newShelf !== "boolean") return null;
     patch.newShelf = b.newShelf;
   }
+  if ("syncMarkVerified" in b) {
+    if (typeof b.syncMarkVerified !== "boolean") return null;
+    patch.syncMarkVerified = b.syncMarkVerified;
+  }
   if ("customCuisines" in b) {
     if (
       !Array.isArray(b.customCuisines) ||
