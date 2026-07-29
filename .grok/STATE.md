@@ -1,26 +1,24 @@
-# Session State - Roux sync harden ship
+# Session State - transcript classification ship
 
 **Date**: 2026-07-29
 
 ## Current Objective
-Ship private YouTube cooking playlist → searchable recipe library (v1). Sync/extract hardening shipped; bulk sync continues locally with YOUTUBE_COOKIES.
+Ship Roux v1. Transcript fail kinds fixed (no_captions vs auth_blocked). All 159 recipes verified in DB.
 
 ## Next Concrete Step
-`npm run sync -- --max=50` (or higher) with cookies to clear remaining LOGIN_REQUIRED backlog. T9 polish when ready.
+Optional: re-run `npm run sync -- --max=20` to confirm skip breakdown labels; T9 polish when ready.
 
 ## Key Context to Load
 - Prod: https://roux-green.vercel.app
-- Local sync only; `YOUTUBE_COOKIES` in `.env.local` (works for captions)
-- `--max` counts writes/extract attempts only, not caption fails
-- All 143 recipes marked verified in DB (manual) so re-extract skipped
-- Head: `01bd1f4` extract retries + max_tokens 8k + prose JSON parse
+- Local sync + YOUTUBE_COOKIES; most remaining backlog is true no_captions (OK + 0 tracks)
+- Head: `bae2e80` transcript kind classification
 
 ## Important Decisions & Invariants
-- No cookies on Vercel; never overwrite verified on re-extract
-- Session user.id = app UUID
+- No cookies on Vercel; verified recipes never re-extracted
+- Playable + 0 tracks = no_captions, not LOGIN_REQUIRED
 
 ## Verification
 ```bash
-npm test && npx tsc --noEmit
-npm run sync -- --max=1
+npm test
+npm run sync -- --max=5   # expect no_captions vs auth_blocked split
 ```
