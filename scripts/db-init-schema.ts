@@ -40,6 +40,13 @@ if (!url) {
   process.exit(1);
 }
 
-const sql = neon(url);
-await sql`CREATE SCHEMA IF NOT EXISTS roux`;
-console.log("OK: schema roux exists");
+async function main() {
+  const sql = neon(url);
+  await sql`CREATE SCHEMA IF NOT EXISTS roux`;
+  console.log("OK: schema roux exists");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
