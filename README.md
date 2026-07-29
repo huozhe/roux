@@ -36,7 +36,8 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 | --- | --- |
 | M0–M1 | Scaffold, Organic, login, types/fixtures/helpers |
 | Wave 2 | T1 auth+Drizzle · T3 Claude extract · T6 library · T7 recipe/cook · T8 share/export/settings |
-| Next | T4 YouTube playlists · T5 sync/cron · wire fixtures → live API (M3–M4) |
+| T4 | YouTube playlists API + Settings picker (fixtures without OAuth) |
+| Next | T5 sync/cron · wire fixtures → live API (M3–M4) |
 
 ### Try locally
 
