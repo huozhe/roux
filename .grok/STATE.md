@@ -1,24 +1,26 @@
-# Session State - transcript classification ship
+# Session State - caption skips + sync verified pref
 
 **Date**: 2026-07-29
 
 ## Current Objective
-Ship Roux v1. Transcript fail kinds fixed (no_captions vs auth_blocked). All 159 recipes verified in DB.
+Ship Roux v1. Caption skips + syncMarkVerified pref shipped.
 
 ## Next Concrete Step
-Optional: re-run `npm run sync -- --max=20` to confirm skip breakdown labels; T9 polish when ready.
+T9 polish / manual E2E: Settings “Mark verified” → sync; Sync page expand caption skip lists.
 
 ## Key Context to Load
 - Prod: https://roux-green.vercel.app
-- Local sync + YOUTUBE_COOKIES; most remaining backlog is true no_captions (OK + 0 tracks)
-- Head: `bae2e80` transcript kind classification
+- `roux.caption_skips` table (no_captions / auth_blocked); GET `/api/sync/caption-skips`
+- Pref `syncMarkVerified` controls new recipe verified flag on extract write
+- Local sync + YOUTUBE_COOKIES; Head: `c6ae40a`
 
 ## Important Decisions & Invariants
-- No cookies on Vercel; verified recipes never re-extracted
-- Playable + 0 tracks = no_captions, not LOGIN_REQUIRED
+- Verified recipes never re-extracted; caption_skips skipped before transcript fetch
+- No cookies on Vercel
 
 ## Verification
 ```bash
 npm test
-npm run sync -- --max=5   # expect no_captions vs auth_blocked split
+# Settings → New recipes from sync → Mark verified
+# Sync page → Expand no captions / auth blocked lists
 ```
