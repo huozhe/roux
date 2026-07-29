@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/organic-fcbe64f2-f659-4f2f-8fa3-1e111899051a/styles.css">
+<script src="_ds/organic-fcbe64f2-f659-4f2f-8fa3-1e111899051a/_ds_bundle.js"></script>
+<style>
+  html, body { margin: 0; background: #f5ead8; }
+</style>
+</helmet>
+
+<div style="padding: 22px; display: flex; flex-direction: column; gap: 22px; background: var(--color-bg); min-height: 100vh">
+  <div style="max-width: 70ch; display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 34px">Roux on Android</h1>
+    <p class="text-muted" style="margin: 0; font-size: 14px">The same app at 412 × 892 — every frame is live, so you can filter, open a recipe and step through cook mode with your thumb. Ingredients sit above the fold because the video collapses; cook-mode controls are 64px tall and sit at the bottom of the screen where your hand already is.</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 22px">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span class="tag tag-accent">Library</span>
+        <span class="text-muted" style="font-size: 12.5px">chips wrap, cards go one-up</span>
+      </div>
+      <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+        <dc-import name="Recipe App" start-screen="library" hint-size="100%,100%" style="height: 100%"></dc-import>
+      </x-import>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span class="tag tag-accent">Recipe</span>
+        <span class="text-muted" style="font-size: 12.5px">video collapsed by default</span>
+      </div>
+      <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+        <dc-import name="Recipe App" start-screen="recipe" start-recipe="r1" hint-size="100%,100%" style="height: 100%"></dc-import>
+      </x-import>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span class="tag tag-accent">Cook mode</span>
+        <span class="text-muted" style="font-size: 12.5px">one step, arm's length away</span>
+      </div>
+      <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+        <dc-import name="Recipe App" start-screen="cook" start-recipe="r3" hint-size="100%,100%" style="height: 100%"></dc-import>
+      </x-import>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span class="tag tag-accent-2">Settings</span>
+        <span class="text-muted" style="font-size: 12.5px">playlist picking on a phone</span>
+      </div>
+      <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+        <dc-import name="Recipe App" start-screen="settings" hint-size="100%,100%" style="height: 100%"></dc-import>
+      </x-import>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

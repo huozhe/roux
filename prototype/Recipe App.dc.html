@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-fcbe64f2-f659-4f2f-8fa3-1e111899051a/styles.css">
+<script src="_ds/organic-fcbe64f2-f659-4f2f-8fa3-1e111899051a/_ds_bundle.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #f5ead8; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  a:hover { color: #b2622d; }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #dcd3c4; border-radius: 999px; }
+</style>
+</helmet>
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+  <div style="min-height: 100%; display: grid; place-items: center; padding: 26.4px; background: var(--color-bg)">
+    <div style="width: min(420px, 100%); display: flex; flex-direction: column; gap: 17.6px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="width: 44px; height: 44px; border-radius: 999px; background: var(--color-accent); display: grid; place-items: center; color: var(--color-bg)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 0-8.5 8.5"/><path d="M12 16.8A4.8 4.8 0 1 0 7.2 12"/><path d="M12 13.2a1.2 1.2 0 1 1-1.2-1.2"/></svg>
+        </div>
+        <div style="font-family: var(--font-heading); font-size: 26px; letter-spacing: -0.015em">Roux</div>
+      </div>
+      <div>
+        <h1 style="font-size: 38px; margin-bottom: 8.8px">Your playlist, as a cookbook.</h1>
+        <p class="text-muted" style="font-size: 15px; margin: 0">Sign in with the Google account that owns the playlist. Roux reads it, writes down the ingredients and steps, and keeps them in sync.</p>
+      </div>
+      <div class="card elev-md" style="gap: 13.2px; padding: 22px">
+        <button class="btn btn-primary btn-block" style="min-height: 46px; font-size: 15px; margin-top: 0" onClick="{{ signIn }}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/></svg>
+          Continue with Google
+        </button>
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--color-neutral-500); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase">
+          <div style="flex: 1; height: 1px; background: var(--color-divider)"></div>
+          Later
+          <div style="flex: 1; height: 1px; background: var(--color-divider)"></div>
+        </div>
+        <p class="text-muted" style="font-size: 12.5px; margin: 0">Email and password sign-up is stubbed for when you open this up to other people — the flow drops in below this button without changing the layout.</p>
+        <button class="btn btn-secondary btn-block" disabled="{{ true }}" style="margin-top: 0">Sign up with email</button>
+      </div>
+      <p class="text-muted" style="font-size: 12px; margin: 0">Read-only access to your YouTube playlists. Nothing is posted, nothing is public.</p>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isCook }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100%; display: flex; flex-direction: column; background: var(--color-bg)">
+    <div style="display: flex; align-items: center; gap: 13.2px; padding: 13.2px 17.6px; border-bottom: 1px solid var(--color-divider)">
+      <button class="btn btn-secondary" onClick="{{ exitCook }}" style="min-height: 40px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Exit
+      </button>
+      <div style="margin-right: auto; font-family: var(--font-heading); font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ recipe.title }}</div>
+      <button class="btn btn-secondary" onClick="{{ toggleAwake }}" style="min-height: 40px" title="Keep screen awake">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></svg>
+        <span>{{ awakeLabel }}</span>
+      </button>
+    </div>
+
+    <div style="display: flex; gap: 6px; padding: 13.2px 17.6px 0">
+      <sc-for list="{{ stepDots }}" as="dot" hint-placeholder-count="6">
+        <div style="flex: 1; height: 6px; border-radius: 999px; background: {{ dot.bg }}"></div>
+      </sc-for>
+    </div>
+
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 17.6px; padding: 26.4px 17.6px; max-width: 900px; width: 100%; margin: 0 auto">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div class="tag tag-accent" style="font-size: 12px">Step {{ cookStepLabel }}</div>
+        <a href="{{ cookStepUrl }}" target="_blank" class="btn btn-ghost" style="font-size: 13px; font-family: var(--font-body); display: {{ tsDisplay }}">Watch this step at {{ cookStepTime }}</a>
+      </div>
+      <div style="font-size: 34px; line-height: 1.3; font-weight: 600; text-wrap: pretty">{{ cookStepText }}</div>
+      <div class="card" style="background: var(--color-accent-2-100); gap: 8.8px; padding: 17.6px">
+        <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent-2-800)">In this step</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{ cookStepIngredients }}" as="ing" hint-placeholder-count="3">
+            <div style="font-size: 16px; font-weight: 600; padding: 6px 14px; border-radius: 999px; background: var(--color-bg)">{{ ing }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 13.2px; padding: 17.6px; border-top: 1px solid var(--color-divider); background: var(--color-surface)">
+      <button class="btn btn-secondary" onClick="{{ prevStep }}" style="flex: 1; min-height: 64px; font-size: 17px; background: var(--color-bg)">Back</button>
+      <button class="btn btn-primary" onClick="{{ nextStep }}" style="flex: 2; min-height: 64px; font-size: 17px; margin-top: 0">{{ nextLabel }}</button>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isPublic }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100%; background: var(--color-bg)">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 13.2px; padding: 13.2px 17.6px; background: var(--color-surface)">
+      <div style="display: flex; align-items: center; gap: 8px; margin-right: auto">
+        <span style="width: 26px; height: 26px; border-radius: 999px; background: var(--color-accent); display: grid; place-items: center; color: var(--color-bg)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 0-8.5 8.5"/><path d="M12 16.8A4.8 4.8 0 1 0 7.2 12"/><path d="M12 13.2a1.2 1.2 0 1 1-1.2-1.2"/></svg>
+        </span>
+        <span style="font-family: var(--font-heading); font-size: 15px">Shared from Roux</span>
+      </div>
+      <span class="tag tag-neutral">preview · read-only</span>
+      <button class="btn btn-secondary" onClick="{{ exitPublic }}">Back to my library</button>
+    </div>
+    <div style="max-width: 720px; margin: 0 auto; padding: 26.4px 17.6px 70px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; flex-direction: column; gap: 8.8px">
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <span class="tag tag-accent">{{ recipe.cuisine }}</span>
+          <span class="tag tag-accent-2">{{ recipe.main }}</span>
+        </div>
+        <h1 style="font-size: 38px; margin: 0; text-wrap: pretty">{{ recipe.title }}</h1>
+        <div class="text-muted" style="font-size: 13.5px">{{ recipe.time }} · {{ recipe.servings }}</div>
+      </div>
+      <sc-if value="{{ videoPlayable }}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="flex-direction: row; flex-wrap: wrap; align-items: center; gap: 13.2px; padding: 13.2px 17.6px">
+          <span style="flex: 1; min-width: 200px; font-size: 13.5px">Written from the video by <strong>{{ recipe.author }}</strong>. Watch the original for technique and timing.</span>
+          <a class="btn btn-primary" href="{{ recipe.url }}" target="_blank" style="margin-top: 0; flex: none">Watch on YouTube</a>
+        </div>
+      </sc-if>
+      <sc-if value="{{ videoGone }}" hint-placeholder-val="{{ false }}">
+        <div class="card" style="flex-direction: row; flex-wrap: wrap; align-items: center; gap: 13.2px; padding: 13.2px 17.6px; background: var(--color-neutral-200); border: 1px dashed var(--color-neutral-400)">
+          <span style="flex: none; display: grid; color: var(--color-neutral-700)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M10.7 5H19a2 2 0 0 1 2 2v10"/><path d="M5 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11"/></svg>
+          </span>
+          <span style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 1px; color: var(--color-neutral-900)">
+            <span style="font-family: var(--font-heading); font-size: 15px">Video no longer available</span>
+            <span class="text-muted" style="font-size: 12.5px">Written from “{{ recipe.videoTitle }}” by {{ recipe.author }}, which has since been taken down.</span>
+          </span>
+        </div>
+      </sc-if>
+      <div class="card" style="gap: 13.2px; padding: 22px">
+        <div style="display: flex; align-items: baseline; gap: 10px">
+          <h4 style="margin: 0">Ingredients</h4>
+          <span class="text-muted" style="font-size: 12.5px">{{ ingredientCount }}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8.8px">
+          <sc-for list="{{ ingredients }}" as="ing" hint-placeholder-count="8">
+            <div style="display: flex; gap: 10px; font-size: 15px; padding: 6px 0; border-bottom: 1px solid var(--color-divider)">
+              <span style="font-weight: 700; min-width: 82px">{{ ing.qty }}</span>
+              <span>{{ ing.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 13.2px">
+        <h4 style="margin: 0">Steps</h4>
+        <sc-for list="{{ steps }}" as="s" hint-placeholder-count="5">
+          <div style="display: flex; gap: 13.2px; align-items: flex-start">
+            <div style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--color-accent-200); color: var(--color-accent-900); display: grid; place-items: center; font-weight: 700; font-size: 14px">{{ s.n }}</div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 13.2px">
+              <div style="font-size: 16px; line-height: 1.5; text-wrap: pretty">{{ s.text }}</div>
+              <a href="{{ s.url }}" target="_blank" style="font-size: 12.5px; display: {{ tsDisplay }}">Video at {{ s.t }}</a>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <p class="text-muted" style="margin: 0; font-size: 12.5px">Shared read-only. The owner can kill this link at any time, and personal notes are never shown here.</p>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100%; display: flex; flex-direction: column; background: var(--color-bg)">
+    <div style="position: sticky; top: 0; z-index: 5; background: var(--color-bg); border-bottom: 1px solid var(--color-divider)">
+      <div class="nav" style="max-width: 1240px; margin: 0 auto; width: 100%; gap: 17.6px; padding: 13.2px 17.6px">
+        <div class="nav-brand" style="display: flex; align-items: center; gap: 8px; margin-right: auto; cursor: pointer" onClick="{{ goLibrary }}">
+          <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--color-accent); display: grid; place-items: center; color: var(--color-bg)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 0-8.5 8.5"/><path d="M12 16.8A4.8 4.8 0 1 0 7.2 12"/><path d="M12 13.2a1.2 1.2 0 1 1-1.2-1.2"/></svg>
+          </span>
+          Roux
+        </div>
+        <a href="#" aria-current="{{ navLibraryCur }}" onClick="{{ goLibrary }}">Library</a>
+        <a href="#" aria-current="{{ navSyncCur }}" onClick="{{ goSync }}">Sync</a>
+        <a href="#" aria-current="{{ navSettingsCur }}" onClick="{{ goSettings }}">Settings</a>
+        <div style="width: 32px; height: 32px; border-radius: 999px; background: var(--color-accent-2-300); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--color-accent-2-900)">JL</div>
+      </div>
+    </div>
+
+    <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width: 1240px; width: 100%; margin: 0 auto; padding: 26.4px 17.6px 70px; display: flex; flex-direction: column; gap: 26.4px">
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 13.2px">
+          <div style="flex: 1; min-width: 240px">
+            <h1 style="font-size: 34px; margin: 0">Library</h1>
+            <div class="text-muted" style="font-size: 13px">{{ totalLabel }} · synced {{ lastSyncAgo }}</div>
+          </div>
+          <div style="flex: 1; min-width: 240px; position: relative">
+            <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--color-neutral-600); display: grid">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            </span>
+            <input class="input" placeholder="Search recipe, ingredient, or author" value="{{ query }}" onChange="{{ setQuery }}" style="min-height: 44px; padding-left: 40px; font-size: 15px">
+          </div>
+        </div>
+
+        <sc-if value="{{ showNewShelf }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 13.2px">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h4 style="margin: 0">Newly added</h4>
+              <div class="tag tag-accent">{{ newCount }} from the last sync</div>
+            </div>
+            <div style="display: flex; gap: 13.2px; overflow-x: auto; padding-bottom: 6px">
+              <sc-for list="{{ newRecipes }}" as="r" hint-placeholder-count="3">
+                <div class="card elev-sm" style="min-width: 300px; max-width: 300px; flex-direction: row; gap: 13.2px; padding: 10px; cursor: pointer; align-items: center" onClick="{{ r.open }}">
+                  <div style="width: 104px; height: 68px; flex: none; border-radius: 18px; background: var(--color-neutral-300); display: grid; place-items: center; color: var(--color-neutral-100)">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <div class="card-title" style="font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.title }}</div>
+                    <div class="text-muted" style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.author }}</div>
+                    <div class="text-muted" style="font-size: 11px">added {{ r.addedLabel }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display: flex; flex-direction: column; gap: 8.8px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+            <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600); width: 74px">Show</div>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="view" checked="{{ viewLibraryChecked }}" onChange="{{ useLibraryView }}"><span>Library</span></label>
+              <label class="seg-opt"><input type="radio" name="view" checked="{{ viewArchiveChecked }}" onChange="{{ useArchiveView }}"><span>{{ archiveLabel }}</span></label>
+            </div>
+          </div>
+          <sc-if value="{{ isLibraryView }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; gap: 8.8px">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600); width: 74px">Cuisine</div>
+                <sc-for list="{{ cuisineChips }}" as="c" hint-placeholder-count="8">
+                  <button class="{{ c.cls }}" style="cursor: pointer; border: 0; font-family: inherit; font-size: 13px; padding: 7px 14px" onClick="{{ c.toggle }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600); width: 74px">Main</div>
+                <sc-for list="{{ mainChips }}" as="c" hint-placeholder-count="7">
+                  <button class="{{ c.cls }}" style="cursor: pointer; border: 0; font-family: inherit; font-size: 13px; padding: 7px 14px" onClick="{{ c.toggle }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px">
+                <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600); width: 74px">Sort</div>
+                <div class="seg">
+                  <label class="seg-opt"><input type="radio" name="sort" checked="{{ sortAddedChecked }}" onChange="{{ sortByAdded }}"><span>Date added</span></label>
+                  <label class="seg-opt"><input type="radio" name="sort" checked="{{ sortUploadedChecked }}" onChange="{{ sortByUploaded }}"><span>Date uploaded</span></label>
+                  <label class="seg-opt"><input type="radio" name="sort" checked="{{ sortTimeChecked }}" onChange="{{ sortByTime }}"><span>Cook time</span></label>
+                </div>
+                <button class="btn btn-secondary" onClick="{{ toggleDir }}" style="gap: 8px" title="Reverse the order">
+                  <span style="display: grid; transform: {{ dirArrow }}; transition: transform 0.18s ease">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                  </span>
+                  {{ dirLabel }}
+                </button>
+                <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}">
+                  <button class="btn btn-ghost" onClick="{{ clearFilters }}" style="font-family: var(--font-body); font-size: 13px">Clear filters</button>
+                </sc-if>
+                <div class="text-muted" style="font-size: 13px; margin-left: auto">{{ resultLabel }}</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ isArchiveView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 13.2px">
+            <div class="card" style="background: var(--color-accent-2-100); padding: 17.6px 22px; gap: 4px">
+              <h4 style="margin: 0">Archive</h4>
+              <p style="margin: 0; font-size: 13.5px; color: var(--color-accent-2-900)">Removed recipes sit here for 30 days, then go for good. While a recipe is archived Roux remembers not to re-add it, even if the video is still in the playlist.</p>
+            </div>
+            <sc-if value="{{ archiveEmpty }}" hint-placeholder-val="{{ true }}">
+              <div class="card" style="align-items: center; text-align: center; padding: 44px; gap: 4px">
+                <h4 style="margin: 0">Nothing archived</h4>
+                <p class="text-muted" style="margin: 0; font-size: 14px">Remove a recipe from its page and it lands here first.</p>
+              </div>
+            </sc-if>
+            <sc-for list="{{ archivedRecipes }}" as="r" hint-placeholder-count="0">
+              <div class="card elev-sm" style="flex-direction: row; flex-wrap: wrap; align-items: center; gap: 13.2px; padding: 13.2px 17.6px">
+                <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px">
+                  <div class="card-title" style="font-size: 16px">{{ r.title }}</div>
+                  <div class="text-muted" style="font-size: 12.5px">{{ r.author }} · {{ r.dateLabel }} · deletes in 30 days</div>
+                </div>
+                <button class="btn btn-secondary" onClick="{{ r.restore }}" style="margin-top: 0">Restore</button>
+                <button class="btn btn-ghost" onClick="{{ r.purge }}" style="font-family: var(--font-body); font-size: 13px">Delete now</button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 17.6px">
+          <sc-for list="{{ visibleGridRecipes }}" as="r" hint-placeholder-count="9">
+            <div class="card elev-sm" style="padding: 10px; gap: 10px; cursor: pointer" style-hover="box-shadow: var(--shadow-md); transform: translateY(-2px)" onClick="{{ r.open }}">
+              <div style="position: relative; aspect-ratio: 16 / 9; border-radius: 20px; background: var(--color-neutral-300); display: grid; place-items: center; color: var(--color-neutral-100); overflow: hidden">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                <div style="position: absolute; right: 8px; bottom: 8px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: rgba(32,30,29,0.72); color: #f5ead8">{{ r.time }}</div>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <span class="tag tag-accent">{{ r.cuisine }}</span>
+                <span class="tag tag-accent-2">{{ r.main }}</span>
+              </div>
+              <div class="card-title" style="font-size: 16px">{{ r.title }}</div>
+              <div class="card-meta" style="justify-content: space-between">
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.author }}</span>
+                <span style="flex: none">{{ r.flag }}</span>
+              </div>
+              <div class="card-meta" style="margin-top: -4px">{{ r.dateLabel }}</div>
+              <sc-if value="{{ r.hasStatus }}" hint-placeholder-val="{{ false }}">
+                <span class="{{ r.statusCls }}" style="align-self: flex-start">{{ r.statusNote }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="align-items: center; text-align: center; padding: 44px; gap: 8.8px">
+            <h4 style="margin: 0">Nothing matches that</h4>
+            <p class="text-muted" style="margin: 0; font-size: 14px">Try a different cuisine, or search the author's channel name.</p>
+            <button class="btn btn-secondary" onClick="{{ clearFilters }}">Clear filters</button>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRecipe }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1240px; width: 100%; margin: 0 auto; padding: 17.6px 17.6px 70px; display: flex; flex-direction: column; gap: 17.6px">
+        <button class="btn btn-ghost" onClick="{{ goLibrary }}" style="align-self: flex-start; font-family: var(--font-body); font-size: 13px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+          Library
+        </button>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 17.6px; align-items: flex-end">
+          <div style="flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 8.8px">
+            <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <span class="tag tag-accent">{{ recipe.cuisine }}</span>
+              <span class="tag tag-accent-2">{{ recipe.main }}</span>
+              <span class="{{ verifyTagCls }}">{{ verifyLabel }}</span>
+            </div>
+            <h1 style="font-size: 40px; margin: 0; text-wrap: pretty">{{ recipe.title }}</h1>
+            <div class="text-muted" style="font-size: 13.5px">
+              <a href="#" onClick="{{ searchAuthor }}">{{ recipe.author }}</a> · {{ recipe.time }} · {{ recipe.servings }} · uploaded {{ recipe.uploadedLabel }} · added {{ recipe.addedLabel }}
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8.8px">
+            <button class="btn btn-primary" onClick="{{ startCook }}" style="min-height: 44px; margin-top: 0">Cook mode</button>
+            <sc-if value="{{ videoGone }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn-secondary" disabled="{{ true }}" style="min-height: 44px">Video unavailable</button>
+            </sc-if>
+            <sc-if value="{{ videoPlayable }}" hint-placeholder-val="{{ true }}">
+              <a class="btn btn-secondary" href="{{ recipe.url }}" target="_blank" style="min-height: 44px">Watch video</a>
+            </sc-if>
+            <button class="btn btn-secondary" onClick="{{ toggleEdit }}" style="min-height: 44px">{{ editLabel }}</button>
+            <button class="btn btn-secondary" onClick="{{ openShare }}" style="min-height: 44px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M12 3v13"/><path d="m8 7 4-4 4 4"/></svg>
+              Share
+            </button>
+            <button class="btn btn-icon btn-secondary" onClick="{{ askRemove }}" title="Remove from library" style="width: 44px; height: 44px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <sc-if value="{{ hasVideoIssue }}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="flex-direction: row; flex-wrap: wrap; align-items: center; gap: 13.2px; background: var(--color-neutral-200); padding: 13.2px 17.6px">
+            <span style="color: var(--color-neutral-700); display: grid; flex: none">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M10.7 5H19a2 2 0 0 1 2 2v10"/><path d="M5 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11"/></svg>
+            </span>
+            <div style="flex: 1; min-width: 200px; font-size: 13.5px; color: var(--color-neutral-900)">{{ videoStatusNote }}</div>
+            <button class="btn btn-secondary" onClick="{{ askRemove }}" style="margin-top: 0; flex: none; background: var(--color-bg)">Remove recipe</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ shareOpen }}" hint-placeholder-val="{{ false }}">
+          <div class="dialog-backdrop">
+            <div class="dialog" style="width: min(480px, 100%)">
+              <div class="dialog-title">Share “{{ recipe.title }}”</div>
+              <div class="dialog-body">Anyone with the link can read the ingredients and steps. Your notes and your verified flags are never included.</div>
+              <div style="display: flex; align-items: center; gap: 10px; padding: 10px 17.6px; border-radius: 999px; background: var(--color-bg); border: 1px solid var(--color-divider)">
+                <span style="flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ shareUrl }}</span>
+                <button class="btn btn-primary" onClick="{{ copyLink }}" style="margin-top: 0; flex: none">{{ copiedLinkLabel }}</button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8.8px">
+                <button class="btn btn-secondary" onClick="{{ copyText }}">{{ copiedTextLabel }}</button>
+                <button class="btn btn-secondary">Print / PDF</button>
+                <button class="btn btn-secondary" onClick="{{ previewPublic }}">See what they see</button>
+              </div>
+              <div class="dialog-actions" style="justify-content: space-between; align-items: center; flex-wrap: wrap">
+                <button class="btn btn-ghost" onClick="{{ revokeLink }}" style="font-family: var(--font-body); font-size: 13px; color: var(--color-accent-700)">Kill this link</button>
+                <button class="btn btn-secondary" onClick="{{ closeShare }}">Done</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ confirming }}" hint-placeholder-val="{{ false }}">
+          <div class="dialog-backdrop">
+            <div class="dialog">
+              <div class="dialog-title">Remove “{{ recipe.title }}”?</div>
+              <div class="dialog-body">Archiving keeps the write-up and your notes for 30 days and stops the next sync from re-adding it. Deleting now is immediate and permanent — if the video is still in the playlist, a later sync would write it up again from scratch.</div>
+              <div class="dialog-actions" style="flex-wrap: wrap">
+                <button class="btn btn-ghost" onClick="{{ cancelRemove }}" style="font-family: var(--font-body); font-size: 13px">Keep it</button>
+                <button class="btn btn-secondary" onClick="{{ confirmDelete }}">Delete permanently</button>
+                <button class="btn btn-primary" onClick="{{ confirmArchive }}" style="margin-top: 0">Archive</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ notEditing }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 13.2px">
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="layout" checked="{{ layoutSingleChecked }}" onChange="{{ useSingle }}"><span>Single scroll</span></label>
+              <label class="seg-opt"><input type="radio" name="layout" checked="{{ layoutSplitChecked }}" onChange="{{ useSplit }}"><span>Ingredients pinned</span></label>
+            </div>
+            <div class="text-muted" style="font-size: 12.5px">Two reading layouts to compare — pick one and I'll drop the other.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isEditing }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 17.6px; max-width: 780px">
+            <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+              <div class="field">
+                <label>Recipe title</label>
+                <input class="input" value="{{ draftTitle }}" onChange="{{ setDraftTitle }}" style="min-height: 44px; font-size: 16px">
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px">
+                <h4 style="margin: 0">Ingredients</h4>
+                <span class="text-muted" style="font-size: 12.5px">quantities in brackets were inferred</span>
+              </div>
+              <sc-for list="{{ draftIngredients }}" as="ing" hint-placeholder-count="6">
+                <div style="display: flex; gap: 8.8px; align-items: center">
+                  <input class="input" value="{{ ing.qty }}" onChange="{{ ing.onQty }}" style="width: 110px; flex: none; min-height: 40px">
+                  <input class="input" value="{{ ing.name }}" onChange="{{ ing.onName }}" style="flex: 1; min-height: 40px">
+                  <button class="btn btn-icon btn-secondary" onClick="{{ ing.remove }}" title="Remove" style="flex: none">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                  </button>
+                </div>
+              </sc-for>
+              <button class="btn btn-secondary" onClick="{{ addIngredient }}" style="align-self: flex-start; margin-top: 0">Add ingredient</button>
+            </div>
+            <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+              <h4 style="margin: 0">Steps</h4>
+              <sc-for list="{{ draftSteps }}" as="s" hint-placeholder-count="5">
+                <div style="display: flex; gap: 10px; align-items: flex-start">
+                  <div style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--color-accent-200); color: var(--color-accent-900); display: grid; place-items: center; font-weight: 700; font-size: 14px">{{ s.n }}</div>
+                  <textarea class="input" value="{{ s.text }}" onChange="{{ s.onText }}" style="flex: 1; border-radius: 20px; min-height: 72px; font-size: 15px"></textarea>
+                  <div style="display: flex; flex-direction: column; gap: 6px; flex: none; align-items: center">
+                    <div class="text-muted" style="font-size: 12px">{{ s.t }}</div>
+                    <button class="btn btn-icon btn-secondary" onClick="{{ s.remove }}" title="Remove">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+              <button class="btn btn-secondary" onClick="{{ addStep }}" style="align-self: flex-start; margin-top: 0">Add step</button>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; position: sticky; bottom: 0; padding: 13.2px 0; background: var(--color-bg)">
+              <button class="btn btn-primary" onClick="{{ saveEdit }}" style="min-height: 44px; margin-top: 0">Save &amp; mark verified</button>
+              <button class="btn btn-secondary" onClick="{{ cancelEdit }}" style="min-height: 44px">Discard changes</button>
+              <div class="text-muted" style="font-size: 12.5px">Your edits win over the next sync — the transcript never overwrites a verified recipe.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showUnverified }}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="flex-direction: row; align-items: center; gap: 13.2px; background: var(--color-accent-100); padding: 13.2px 17.6px">
+            <span style="color: var(--color-accent-700); display: grid; flex: none">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+            </span>
+            <div style="flex: 1; min-width: 180px; font-size: 13.5px; color: var(--color-accent-900)">Written from the video transcript — {{ recipe.confidence }} confidence. Quantities in brackets were inferred. Check them before you commit.</div>
+            <button class="btn btn-primary" onClick="{{ markVerified }}" style="margin-top: 0; flex: none">Mark verified</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSingle }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 26.4px; max-width: 780px">
+            <sc-if value="{{ videoPlayable }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ toggleVideo }}" class="card elev-sm" style="flex-direction: row; align-items: center; gap: 13.2px; padding: 10px 17.6px 10px 10px; cursor: pointer; border: 0; width: 100%; text-align: left; font-family: inherit" style-hover="box-shadow: var(--shadow-md)">
+                <span style="width: 40px; height: 40px; flex: none; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); display: grid; place-items: center">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                  <span style="font-family: var(--font-heading); font-size: 15px">{{ videoToggleLabel }}</span>
+                  <span class="text-muted" style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ recipe.videoTitle }} · {{ recipe.author }}</span>
+                </span>
+                <span style="flex: none; display: grid; transform: {{ videoChevron }}; transition: transform 0.18s ease">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </button>
+            </sc-if>
+            <sc-if value="{{ videoExpanded }}" hint-placeholder-val="{{ false }}">
+              <a href="{{ recipe.url }}" target="_blank" style="display: block; position: relative; aspect-ratio: 16 / 9; border-radius: 28px; background: var(--color-neutral-300); overflow: hidden; margin-top: -13.2px">
+                <span style="position: absolute; inset: 0; display: grid; place-items: center">
+                  <span style="width: 68px; height: 68px; border-radius: 999px; background: var(--color-accent); display: grid; place-items: center; color: var(--color-bg); box-shadow: var(--shadow-md)">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                </span>
+                <span style="position: absolute; left: 14px; bottom: 14px; font-size: 12px; padding: 5px 12px; border-radius: 999px; background: rgba(32,30,29,0.72); color: #f5ead8">{{ recipe.videoTitle }}</span>
+              </a>
+            </sc-if>
+            <sc-if value="{{ videoGone }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; gap: 13.2px; padding: 13.2px 17.6px; border-radius: 28px; background: var(--color-neutral-200); border: 1px dashed var(--color-neutral-400); color: var(--color-neutral-700)">
+                <span style="flex: none; display: grid">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M10.7 5H19a2 2 0 0 1 2 2v10"/><path d="M5 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11"/></svg>
+                </span>
+                <span style="min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                  <span style="font-family: var(--font-heading); font-size: 15px">Video no longer available</span>
+                  <span class="text-muted" style="font-size: 12.5px">Was “{{ recipe.videoTitle }}” by {{ recipe.author }}</span>
+                </span>
+              </div>
+            </sc-if>
+            <div class="card" style="gap: 13.2px; padding: 22px">
+              <div style="display: flex; align-items: baseline; gap: 10px">
+                <h4 style="margin: 0">Ingredients</h4>
+                <span class="text-muted" style="font-size: 12.5px">{{ ingredientCount }}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8.8px">
+                <sc-for list="{{ ingredients }}" as="ing" hint-placeholder-count="8">
+                  <div style="display: flex; gap: 10px; font-size: 15px; padding: 6px 0; border-bottom: 1px solid var(--color-divider)">
+                    <span style="font-weight: 700; min-width: 82px">{{ ing.qty }}</span>
+                    <span>{{ ing.name }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 13.2px">
+              <h4 style="margin: 0">Steps</h4>
+              <sc-for list="{{ steps }}" as="s" hint-placeholder-count="6">
+                <div style="display: flex; gap: 13.2px; align-items: flex-start">
+                  <div style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--color-accent-200); color: var(--color-accent-900); display: grid; place-items: center; font-weight: 700; font-size: 14px">{{ s.n }}</div>
+                  <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 13.2px">
+                    <div style="font-size: 16px; line-height: 1.5; text-wrap: pretty">{{ s.text }}</div>
+                    <a href="{{ s.url }}" target="_blank" style="font-size: 12.5px; display: {{ tsDisplay }}">Video at {{ s.t }}</a>
+                    <span class="text-muted" style="font-size: 12.5px; display: {{ tsDeadDisplay }}">Was at {{ s.t }} — video unavailable</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="card" style="gap: 8.8px; padding: 22px; background: var(--color-accent-2-100)">
+              <h4 style="margin: 0">My notes</h4>
+              <textarea class="input" placeholder="Substitutions, what went wrong, what to do differently…" value="{{ notes }}" onChange="{{ setNotes }}" style="background: var(--color-bg); border-radius: 20px; font-size: 15px; min-height: 96px"></textarea>
+              <div class="text-muted" style="font-size: 12px">{{ notesStatus }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSplit }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 26.4px; align-items: start">
+            <div class="card elev-sm" style="gap: 13.2px; padding: 22px; position: sticky; top: 90px">
+              <div style="display: flex; align-items: baseline; gap: 10px">
+                <h4 style="margin: 0">Ingredients</h4>
+                <span class="text-muted" style="font-size: 12.5px">{{ ingredientCount }}</span>
+              </div>
+              <sc-for list="{{ ingredients }}" as="ing" hint-placeholder-count="8">
+                <div style="display: flex; gap: 10px; font-size: 15px; padding: 6px 0; border-bottom: 1px solid var(--color-divider)">
+                  <span style="font-weight: 700; min-width: 82px">{{ ing.qty }}</span>
+                  <span>{{ ing.name }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ videoPlayable }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ toggleVideo }}" style="display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 4px; padding: 8px 13.2px 8px 8px; border: 1px solid var(--color-divider); border-radius: 999px; background: var(--color-bg); cursor: pointer; font-family: inherit; text-align: left" style-hover="border-color: var(--color-accent)">
+                  <span style="width: 30px; height: 30px; flex: none; border-radius: 999px; background: var(--color-accent); color: var(--color-bg); display: grid; place-items: center">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span style="flex: 1; font-family: var(--font-heading); font-size: 14px">{{ videoToggleLabel }}</span>
+                  <span style="flex: none; display: grid; transform: {{ videoChevron }}; transition: transform 0.18s ease">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </span>
+                </button>
+              </sc-if>
+              <sc-if value="{{ videoExpanded }}" hint-placeholder-val="{{ false }}">
+                <a href="{{ recipe.url }}" target="_blank" style="position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 20px; background: var(--color-neutral-300)">
+                  <span style="position: absolute; inset: 0; display: grid; place-items: center; color: var(--color-neutral-100)">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span style="position: absolute; left: 10px; bottom: 10px; font-size: 11px; padding: 4px 10px; border-radius: 999px; background: rgba(32,30,29,0.72); color: #f5ead8; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ recipe.videoTitle }}</span>
+                </a>
+              </sc-if>
+              <sc-if value="{{ videoGone }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 13.2px; border-radius: 20px; background: var(--color-neutral-200); border: 1px dashed var(--color-neutral-400); color: var(--color-neutral-700)">
+                  <span style="flex: none; display: grid">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M10.7 5H19a2 2 0 0 1 2 2v10"/><path d="M5 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11"/></svg>
+                  </span>
+                  <span style="font-size: 12.5px">Video no longer available</span>
+                </div>
+              </sc-if>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 17.6px; min-width: 0">
+              <h4 style="margin: 0">Steps</h4>
+              <sc-for list="{{ steps }}" as="s" hint-placeholder-count="6">
+                <div class="card" style="flex-direction: row; gap: 13.2px; align-items: flex-start; padding: 17.6px">
+                  <div style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--color-accent-200); color: var(--color-accent-900); display: grid; place-items: center; font-weight: 700; font-size: 14px">{{ s.n }}</div>
+                  <div style="display: flex; flex-direction: column; gap: 4px">
+                    <div style="font-size: 16px; line-height: 1.5; text-wrap: pretty">{{ s.text }}</div>
+                    <a href="{{ s.url }}" target="_blank" style="font-size: 12.5px; display: {{ tsDisplay }}">Video at {{ s.t }}</a>
+                    <span class="text-muted" style="font-size: 12.5px; display: {{ tsDeadDisplay }}">Was at {{ s.t }} — video unavailable</span>
+                  </div>
+                </div>
+              </sc-for>
+              <div class="card" style="gap: 8.8px; padding: 22px; background: var(--color-accent-2-100)">
+                <h4 style="margin: 0">My notes</h4>
+                <textarea class="input" placeholder="Substitutions, what went wrong, what to do differently…" value="{{ notes }}" onChange="{{ setNotes }}" style="background: var(--color-bg); border-radius: 20px; font-size: 15px; min-height: 96px"></textarea>
+                <div class="text-muted" style="font-size: 12px">{{ notesStatus }}</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSync }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 900px; width: 100%; margin: 0 auto; padding: 26.4px 17.6px 70px; display: flex; flex-direction: column; gap: 22px">
+        <div>
+          <h1 style="font-size: 34px; margin: 0">Sync</h1>
+          <div class="text-muted" style="font-size: 13.5px">Roux checks the playlist on a schedule and writes up anything new.</div>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 17.6px">
+          <div style="display: flex; flex-wrap: wrap; gap: 17.6px; align-items: center">
+            <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px">
+              <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600)">Watching</div>
+              <div style="font-family: var(--font-heading); font-size: 19px">{{ playlistName }}</div>
+              <div class="text-muted" style="font-size: 12.5px">{{ playlistMeta }}</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px">
+                <sc-for list="{{ chosenPlaylists }}" as="p" hint-placeholder-count="2">
+                  <span class="tag tag-accent-2">{{ p.name }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 130px">
+              <div style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-600)">Last run</div>
+              <div style="font-size: 15px; font-weight: 600">{{ lastSyncAgo }}</div>
+              <div class="text-muted" style="font-size: 12.5px">next in 4h</div>
+            </div>
+            <button class="btn btn-primary" onClick="{{ runSync }}" style="min-height: 44px; margin-top: 0" disabled="{{ syncing }}">{{ syncLabel }}</button>
+          </div>
+          <sc-if value="{{ syncing }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; align-items: center; gap: 13.2px; padding: 13.2px 17.6px; border-radius: 20px; background: var(--color-bg)">
+              <span style="width: 18px; height: 18px; border-radius: 999px; border: 2.75px solid var(--color-accent-200); border-top-color: var(--color-accent); animation: spin 0.8s linear infinite; flex: none"></span>
+              <div style="font-size: 14px">{{ syncStage }}</div>
+            </div>
+          </sc-if>
+          <div style="display: flex; flex-wrap: wrap; gap: 8.8px">
+            <div style="flex: 1; min-width: 120px; background: var(--color-bg); border-radius: 20px; padding: 13.2px">
+              <div style="font-family: var(--font-heading); font-size: 25px">12</div>
+              <div class="text-muted" style="font-size: 12px">added this month</div>
+            </div>
+            <div style="flex: 1; min-width: 120px; background: var(--color-bg); border-radius: 20px; padding: 13.2px">
+              <div style="font-family: var(--font-heading); font-size: 25px">18</div>
+              <div class="text-muted" style="font-size: 12px">need a transcript</div>
+            </div>
+            <div style="flex: 1; min-width: 120px; background: var(--color-bg); border-radius: 20px; padding: 13.2px">
+              <div style="font-family: var(--font-heading); font-size: 25px">37</div>
+              <div class="text-muted" style="font-size: 12px">unverified</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding: 22px; gap: 13.2px">
+          <h4 style="margin: 0">History</h4>
+          <div style="overflow-x: auto">
+            <table class="table">
+              <thead><tr><th>When</th><th>Found</th><th>Written up</th><th>Skipped</th><th>Result</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ syncHistory }}" as="h" hint-placeholder-count="6">
+                  <tr>
+                    <td style="white-space: nowrap">{{ h.when }}</td>
+                    <td>{{ h.found }}</td>
+                    <td>{{ h.written }}</td>
+                    <td>{{ h.skipped }}</td>
+                    <td><span class="{{ h.cls }}">{{ h.result }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 720px; width: 100%; margin: 0 auto; padding: 26.4px 17.6px 70px; display: flex; flex-direction: column; gap: 22px">
+        <div>
+          <h1 style="font-size: 34px; margin: 0">Settings</h1>
+          <div class="text-muted" style="font-size: 13.5px">One account for now. Registration opens later without moving anything.</div>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 17.6px">
+          <h4 style="margin: 0">Account</h4>
+          <div style="display: flex; align-items: center; gap: 13.2px">
+            <div style="width: 44px; height: 44px; border-radius: 999px; background: var(--color-accent-2-300); display: grid; place-items: center; font-weight: 700; color: var(--color-accent-2-900)">JL</div>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600; font-size: 15px">Jason L.</div>
+              <div class="text-muted" style="font-size: 13px; overflow: hidden; text-overflow: ellipsis">jason@gmail.com · Google</div>
+            </div>
+            <button class="btn btn-secondary" onClick="{{ signOut }}">Sign out</button>
+          </div>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+          <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px">
+            <h4 style="margin: 0">Source playlists</h4>
+            <span class="text-muted" style="font-size: 12.5px; margin-right: auto">{{ playlistCountLabel }}</span>
+            <button class="btn btn-ghost" style="font-family: var(--font-body); font-size: 13px">Refresh list</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <sc-for list="{{ playlists }}" as="p" hint-placeholder-count="5">
+              <label class="radio" style="align-items: center; gap: 13.2px; padding: 10px 13.2px; border-radius: 20px; background: var(--color-bg)" style-hover="background: var(--color-neutral-200)">
+                <input type="checkbox" name="playlist" checked="{{ p.checked }}" onChange="{{ p.select }}">
+                <sc-if value="{{ p.checked }}" hint-placeholder-val="{{ true }}">
+                  <span style="width: 20px; height: 20px; flex: none; border-radius: 7px; background: var(--color-accent); border: 1.5px solid var(--color-accent); display: grid; place-items: center; color: var(--color-bg)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                </sc-if>
+                <sc-if value="{{ p.unchecked }}" hint-placeholder-val="{{ false }}">
+                  <span style="width: 20px; height: 20px; flex: none; border-radius: 7px; border: 1.5px solid var(--color-neutral-400); background: var(--color-neutral-100)"></span>
+                </sc-if>
+                <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+                  <span style="font-size: 15px; font-weight: 600">{{ p.name }}</span>
+                  <span class="text-muted" style="font-size: 12.5px">{{ p.meta }}</span>
+                </span>
+              </label>
+            </sc-for>
+          </div>
+          <p class="text-muted" style="margin: 0; font-size: 13px">Pick as many as you like — everything lands in one library, and each recipe remembers which playlist it came from. New videos are written up automatically; Roux decides how often to check.</p>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 17.6px">
+          <h4 style="margin: 0">Reading preferences</h4>
+          <div class="field">
+            <label>Recipe page layout</label>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="preflayout" checked="{{ prefLayoutSingle }}" onChange="{{ setPrefSingle }}"><span>Single scroll</span></label>
+              <label class="seg-opt"><input type="radio" name="preflayout" checked="{{ prefLayoutSplit }}" onChange="{{ setPrefSplit }}"><span>Ingredients pinned</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Show the video timestamp on each step</label>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="prefts" checked="{{ prefTsOn }}" onChange="{{ setTsOn }}"><span>Show</span></label>
+              <label class="seg-opt"><input type="radio" name="prefts" checked="{{ prefTsOff }}" onChange="{{ setTsOff }}"><span>Hide</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>“Newly added” shelf at the top of the library</label>
+            <div class="seg">
+              <label class="seg-opt"><input type="radio" name="prefnew" checked="{{ prefNewOn }}" onChange="{{ setNewOn }}"><span>Show</span></label>
+              <label class="seg-opt"><input type="radio" name="prefnew" checked="{{ prefNewOff }}" onChange="{{ setNewOff }}"><span>Hide</span></label>
+            </div>
+          </div>
+          <p class="text-muted" style="margin: 0; font-size: 13px">Saved to your account, so the phone in the kitchen and the laptop agree.</p>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 8.8px">
+          <h4 style="margin: 0">When a video disappears</h4>
+          <p style="margin: 0; font-size: 14px">Roux keeps the recipe. Whether you pull the video out of the playlist or the uploader takes it down, the write-up, your edits and your notes stay — the recipe is just flagged, and the dead link is disabled. A lost video is never a lost recipe.</p>
+          <p class="text-muted" style="margin: 0; font-size: 13px">Only you can remove a recipe, from its own page. Archived recipes wait 30 days and keep a tombstone so a later sync won't re-add them.</p>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+          <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px">
+            <h4 style="margin: 0">Shared links</h4>
+            <span class="text-muted" style="font-size: 12.5px">Read-only pages you've handed out</span>
+          </div>
+          <sc-if value="{{ sharesEmpty }}" hint-placeholder-val="{{ true }}">
+            <p class="text-muted" style="margin: 0; font-size: 13.5px">None yet. Share a recipe from its page and the link shows up here — killing it here breaks it everywhere.</p>
+          </sc-if>
+          <sc-for list="{{ sharedLinks }}" as="l" hint-placeholder-count="0">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 13.2px; border-radius: 20px; background: var(--color-bg)">
+              <span style="flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 1px">
+                <span style="font-size: 14px; font-weight: 600">{{ l.title }}</span>
+                <span class="text-muted" style="font-size: 12.5px">{{ l.url }}</span>
+              </span>
+              <button class="btn btn-secondary" onClick="{{ l.revoke }}" style="margin-top: 0">Kill link</button>
+            </div>
+          </sc-for>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+          <h4 style="margin: 0">Export your library</h4>
+          <p class="text-muted" style="margin: 0; font-size: 13.5px">Everything you've written up, including your notes — yours to keep, no lock-in.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8.8px">
+            <button class="btn btn-secondary">Download JSON</button>
+            <button class="btn btn-secondary">Download Markdown (.zip)</button>
+          </div>
+        </div>
+        <div class="card elev-sm" style="padding: 22px; gap: 13.2px">
+          <h4 style="margin: 0">Categories</h4>
+          <p class="text-muted" style="margin: 0; font-size: 13.5px">Cuisine and main-ingredient tags are guessed per recipe and editable on the recipe page. Add your own to have them offered as options.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <sc-for list="{{ allCuisines }}" as="c" hint-placeholder-count="8">
+              <span class="tag tag-accent">{{ c }}</span>
+            </sc-for>
+            <button class="tag tag-outline" style="cursor: pointer; background: transparent; font-family: inherit; font-size: 11px">+ Add</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;login&quot;,&quot;tsType&quot;:&quot;\&quot;login\&quot; | \&quot;library\&quot; | \&quot;recipe\&quot; | \&quot;cook\&quot; | \&quot;sync\&quot; | \&quot;settings\&quot;&quot;},&quot;startRecipe&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;r1&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startLayout&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;single&quot;,&quot;tsType&quot;:&quot;\&quot;single\&quot; | \&quot;split\&quot;&quot;}}">
+const V = "https://www.youtube.com/watch?v=";
+
+const RAW = [
+  {
+    id: "r1", title: "Mapo Tofu", videoTitle: "REAL Mapo Tofu (麻婆豆腐) — the numbing one",
+    author: "Wok Discipline", cuisine: "Sichuan", main: "Tofu", time: "25 min", servings: "serves 2",
+    vid: "aa1", uploaded: "Mar 2024", added: "2 days ago", verified: false, confidence: "medium",
+    ingredients: [
+      { qty: "400 g", name: "soft tofu, cubed" },
+      { qty: "150 g", name: "ground pork" },
+      { qty: "2 tbsp", name: "doubanjiang" },
+      { qty: "1 tbsp", name: "douchi, rinsed" },
+      { qty: "1 tsp", name: "ground Sichuan pepper" },
+      { qty: "3", name: "garlic cloves, minced" },
+      { qty: "200 ml", name: "chicken stock" },
+      { qty: "[1 tbsp]", name: "cornstarch slurry" }
+    ],
+    steps: [
+      { t: "1:10", text: "Slide the tofu into salted simmering water and hold it there off the heat — it firms up and stops breaking in the pan." },
+      { t: "2:40", text: "Render the pork in a dry wok until the fat runs and the edges crisp. Push it to one side." },
+      { t: "4:05", text: "Fry the doubanjiang and douchi in that fat on low for a full minute, until the oil turns deep red." },
+      { t: "5:30", text: "Add garlic, then stock. Drain the tofu and fold it in with the back of a ladle — never a spoon edge." },
+      { t: "7:15", text: "Thicken with the slurry in three additions, waiting for a boil between each. Finish off-heat with the Sichuan pepper." }
+    ]
+  },
+  {
+    id: "r2", title: "Oyakodon", videoTitle: "Oyakodon in 15 minutes (chicken & egg rice bowl)",
+    author: "Kitchen Kana", cuisine: "Japanese", main: "Chicken", time: "15 min", servings: "serves 1",
+    vid: "aa2", uploaded: "Jan 2024", added: "5 days ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "1", name: "chicken thigh, bite-sized" },
+      { qty: "2", name: "eggs, loosely beaten" },
+      { qty: "1/2", name: "onion, sliced thin" },
+      { qty: "80 ml", name: "dashi" },
+      { qty: "1 tbsp", name: "soy sauce" },
+      { qty: "1 tbsp", name: "mirin" },
+      { qty: "1 tsp", name: "sugar" },
+      { qty: "1 bowl", name: "hot rice" }
+    ],
+    steps: [
+      { t: "0:45", text: "Simmer dashi, soy, mirin and sugar in a small pan — smaller than you think, the liquid should come halfway up." },
+      { t: "2:20", text: "Add onion and cook until translucent, then the chicken skin-side down. Four minutes, no stirring." },
+      { t: "5:00", text: "Pour in two thirds of the egg in a spiral and cover. Thirty seconds." },
+      { t: "6:10", text: "Add the rest of the egg, cover, kill the heat. Let it set from residual heat so the top stays glossy." },
+      { t: "7:30", text: "Slide the whole thing onto rice in one motion. Scallion, sansho." }
+    ]
+  },
+  {
+    id: "r3", title: "Carnitas", videoTitle: "Carnitas without a giant copper pot",
+    author: "Comal", cuisine: "Mexican", main: "Pork", time: "3 hr", servings: "serves 6",
+    vid: "aa3", uploaded: "Nov 2023", added: "1 week ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "1.5 kg", name: "pork shoulder, large chunks" },
+      { qty: "200 g", name: "lard" },
+      { qty: "1", name: "orange, halved" },
+      { qty: "1", name: "onion, quartered" },
+      { qty: "4", name: "garlic cloves" },
+      { qty: "2 tsp", name: "salt" },
+      { qty: "1", name: "cinnamon stick" }
+    ],
+    steps: [
+      { t: "1:30", text: "Salt the pork and leave it uncovered in the fridge overnight if you can. Dry surface, better browning later." },
+      { t: "3:10", text: "Everything into a heavy pot with the lard, barely covered. Squeeze the orange in and drop the halves on top." },
+      { t: "5:45", text: "Bare simmer, lid ajar, two and a half hours. It should never bubble hard." },
+      { t: "9:20", text: "Lift the meat out, raise the heat, and fry it in the rendered fat until the edges catch. This is the whole dish." },
+      { t: "11:00", text: "Shred coarsely — leave some pieces whole. Warm tortillas, onion, cilantro, lime." }
+    ]
+  },
+  {
+    id: "r4", title: "Coq au Vin Blanc", videoTitle: "Coq au vin blanc — the version I actually make",
+    author: "Rue Mouffetard", cuisine: "French", main: "Chicken", time: "1 hr 30", servings: "serves 4",
+    vid: "aa4", uploaded: "Feb 2024", added: "2 weeks ago", verified: false, confidence: "low",
+    ingredients: [
+      { qty: "8", name: "chicken thighs, skin on" },
+      { qty: "150 g", name: "lardons" },
+      { qty: "250 g", name: "button mushrooms" },
+      { qty: "12", name: "pearl onions" },
+      { qty: "500 ml", name: "dry white wine" },
+      { qty: "[300 ml]", name: "chicken stock" },
+      { qty: "2 tbsp", name: "butter" },
+      { qty: "[1 tbsp]", name: "flour" }
+    ],
+    steps: [
+      { t: "2:00", text: "Brown the lardons, remove. Brown the chicken hard in that fat, skin first, in two batches." },
+      { t: "5:15", text: "Onions and mushrooms in the same pan until coloured. Dust with flour and cook it out for a minute." },
+      { t: "7:40", text: "Deglaze with the wine, scraping everything up. Reduce by a third before the stock goes in." },
+      { t: "10:20", text: "Chicken back in skin-up, uncovered, 45 minutes at a low simmer so the skin stays above the liquid." },
+      { t: "14:00", text: "Whisk cold butter into the sauce off the heat. Taste for salt twice." }
+    ]
+  },
+  {
+    id: "r5", title: "Dan Dan Noodles", videoTitle: "Dan dan noodles — no sesame paste needed",
+    author: "Wok Discipline", cuisine: "Sichuan", main: "Noodles", time: "20 min", servings: "serves 2",
+    vid: "aa5", uploaded: "Dec 2023", added: "2 weeks ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "200 g", name: "fresh wheat noodles" },
+      { qty: "150 g", name: "ground pork" },
+      { qty: "2 tbsp", name: "ya cai" },
+      { qty: "3 tbsp", name: "chili oil with sediment" },
+      { qty: "2 tbsp", name: "soy sauce" },
+      { qty: "1 tsp", name: "black vinegar" },
+      { qty: "1/2 tsp", name: "ground Sichuan pepper" }
+    ],
+    steps: [
+      { t: "0:50", text: "Build the sauce in the serving bowls first: chili oil, soy, vinegar, Sichuan pepper. No stirring yet." },
+      { t: "2:30", text: "Fry the pork dry and hard until crisp, then the ya cai for another minute." },
+      { t: "4:10", text: "Boil the noodles a shade under, lift them straight into the bowls with a splash of noodle water." },
+      { t: "5:40", text: "Pork on top. Toss at the table, from the bottom up." }
+    ]
+  },
+  {
+    id: "r6", title: "Cacio e Pepe", videoTitle: "Cacio e pepe that doesn't clump (finally)",
+    author: "Trastevere Table", cuisine: "Italian", main: "Noodles", time: "15 min", servings: "serves 2",
+    vid: "aa6", uploaded: "Oct 2023", added: "3 weeks ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "180 g", name: "tonnarelli" },
+      { qty: "120 g", name: "pecorino romano, grated fine" },
+      { qty: "2 tsp", name: "black peppercorns, cracked" }
+    ],
+    steps: [
+      { t: "0:40", text: "Toast the cracked pepper in a dry pan until it smells sharp, then add a ladle of pasta water." },
+      { t: "2:10", text: "Cook the pasta in less water than usual — you want it starchy." },
+      { t: "3:30", text: "Make a paste with the pecorino and cool pasta water off the heat. Cool. If it's hot, it breaks." },
+      { t: "5:00", text: "Pasta into the pepper pan, then the cheese paste off the heat, tossing hard until it coats." }
+    ]
+  },
+  {
+    id: "r7", title: "Bulgogi", videoTitle: "Bulgogi marinade my mum still uses",
+    author: "Banchan Diary", cuisine: "Korean", main: "Beef", time: "30 min", servings: "serves 4",
+    vid: "aa7", uploaded: "Apr 2024", added: "1 month ago", verified: false, confidence: "medium",
+    ingredients: [
+      { qty: "600 g", name: "ribeye, sliced paper thin" },
+      { qty: "1/2", name: "Asian pear, grated" },
+      { qty: "4 tbsp", name: "soy sauce" },
+      { qty: "2 tbsp", name: "sugar" },
+      { qty: "1 tbsp", name: "sesame oil" },
+      { qty: "4", name: "garlic cloves, grated" },
+      { qty: "1", name: "onion, sliced" }
+    ],
+    steps: [
+      { t: "1:20", text: "Freeze the beef for 40 minutes before slicing. Thin enough to see through." },
+      { t: "3:00", text: "Grate the pear into the soy, sugar, sesame oil and garlic. Marinate 30 minutes — not overnight, the pear turns it mushy." },
+      { t: "5:30", text: "Screaming hot pan, thin layers, no crowding. Let each batch catch before you move it." },
+      { t: "7:00", text: "Onions in at the end so they keep some bite. Sesame seeds, scallion." }
+    ]
+  },
+  {
+    id: "r8", title: "Green Curry", videoTitle: "Green curry from scratch paste (worth it)",
+    author: "Soi Kitchen", cuisine: "Thai", main: "Chicken", time: "45 min", servings: "serves 4",
+    vid: "aa8", uploaded: "Jun 2024", added: "1 month ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "3 tbsp", name: "green curry paste" },
+      { qty: "400 ml", name: "coconut cream" },
+      { qty: "500 g", name: "chicken thigh" },
+      { qty: "1 tbsp", name: "palm sugar" },
+      { qty: "2 tbsp", name: "fish sauce" },
+      { qty: "100 g", name: "Thai eggplant" },
+      { qty: "1 handful", name: "Thai basil" }
+    ],
+    steps: [
+      { t: "2:40", text: "Crack the coconut cream in a wok until the oil separates out — five minutes, don't rush it." },
+      { t: "5:10", text: "Fry the paste in that oil until it darkens and smells like the market, not like the jar." },
+      { t: "7:20", text: "Chicken in, coated, then the rest of the coconut. Season with palm sugar and fish sauce now." },
+      { t: "10:00", text: "Eggplant last, cooked just until it gives. Basil off the heat." }
+    ]
+  },
+  {
+    id: "r9", title: "Smash Burger", videoTitle: "Smash burgers on a home stove (no smoke alarm)",
+    author: "Flattop", cuisine: "American", main: "Beef", time: "20 min", servings: "makes 4",
+    vid: "aa9", uploaded: "May 2024", added: "1 month ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "500 g", name: "beef chuck, 20% fat" },
+      { qty: "4", name: "potato buns" },
+      { qty: "8 slices", name: "American cheese" },
+      { qty: "1", name: "onion, shaved" },
+      { qty: "to taste", name: "salt, pepper" }
+    ],
+    steps: [
+      { t: "1:00", text: "Loose 60 g balls, handled as little as possible. Chill them until the pan is ready." },
+      { t: "3:20", text: "Cast iron, dry, high, five minutes. Ball down, press once for ten seconds, then leave it." },
+      { t: "5:00", text: "Salt now, not before. Flip when the edges are lace. Cheese immediately." },
+      { t: "6:30", text: "Buns toasted in the fat. Stack two patties, onion, sauce." }
+    ]
+  },
+  {
+    id: "r10", title: "Butter Chicken", videoTitle: "Butter chicken — restaurant taste, home kit",
+    author: "Tawa", cuisine: "Indian", main: "Chicken", time: "1 hr", servings: "serves 4",
+    vid: "b10", uploaded: "Feb 2024", added: "2 months ago", verified: false, confidence: "medium",
+    ingredients: [
+      { qty: "700 g", name: "chicken thigh" },
+      { qty: "150 g", name: "yoghurt" },
+      { qty: "400 g", name: "tomato passata" },
+      { qty: "80 g", name: "butter" },
+      { qty: "100 ml", name: "cream" },
+      { qty: "1 tbsp", name: "garam masala" },
+      { qty: "[1 tsp]", name: "kasoori methi" }
+    ],
+    steps: [
+      { t: "1:40", text: "Marinate the chicken in yoghurt, garam masala and salt for at least an hour." },
+      { t: "4:00", text: "Char it under the grill until spotted black — the smoke is half the flavour." },
+      { t: "6:30", text: "Cook the passata down hard in butter until it goes brick-coloured and stops tasting raw." },
+      { t: "9:10", text: "Blend smooth, return, add cream and the crushed methi. Chicken in at the very end." }
+    ]
+  },
+  {
+    id: "r11", title: "Miso Salmon", videoTitle: "Miso salmon, weeknight version",
+    author: "Kitchen Kana", cuisine: "Japanese", main: "Seafood", time: "25 min", servings: "serves 2",
+    vid: "b11", uploaded: "Jul 2024", added: "2 months ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "2", name: "salmon fillets" },
+      { qty: "2 tbsp", name: "white miso" },
+      { qty: "1 tbsp", name: "mirin" },
+      { qty: "1 tbsp", name: "sake" },
+      { qty: "1 tsp", name: "sugar" }
+    ],
+    steps: [
+      { t: "0:50", text: "Whisk miso, mirin, sake and sugar. Coat the salmon and leave it 20 minutes, no longer — the salt draws water." },
+      { t: "3:00", text: "Wipe most of the marinade off or it burns. Skin-side down in a cool pan, heat rising." },
+      { t: "5:20", text: "Finish under the grill for two minutes so the glaze blisters." }
+    ]
+  },
+  {
+    id: "r12", title: "Braised Eggplant", videoTitle: "Braised eggplant with garlic (no deep frying)",
+    author: "Wok Discipline", cuisine: "Chinese", main: "Vegetable", time: "25 min", servings: "serves 2",
+    vid: "b12", uploaded: "Aug 2024", added: "3 months ago", verified: true, confidence: "high",
+    ingredients: [
+      { qty: "2", name: "Chinese eggplants, batons" },
+      { qty: "6", name: "garlic cloves, sliced" },
+      { qty: "1 tbsp", name: "light soy sauce" },
+      { qty: "1 tsp", name: "dark soy sauce" },
+      { qty: "1 tsp", name: "sugar" },
+      { qty: "1 tsp", name: "black vinegar" }
+    ],
+    steps: [
+      { t: "1:10", text: "Salt the eggplant 15 minutes and press it dry. It drinks far less oil this way." },
+      { t: "3:30", text: "Sear cut-side down in a thin film of oil until collapsed and golden." },
+      { t: "5:40", text: "Garlic in the gaps, then the sauce and a splash of water. Lid on, four minutes." },
+      { t: "7:20", text: "Uncover, reduce to a glaze, vinegar off the heat." }
+    ]
+  }
+];
+
+// Video-side status. "ok" = still in the playlist; "gone" = the uploader deleted or
+// privated it; "off-playlist" = you removed it from the playlist but it still exists.
+const STATUS = { r4: "gone", r6: "off-playlist" };
+const STATUS_TEXT = {
+  gone: "Video unavailable",
+  "off-playlist": "No longer in the playlist"
+};
+
+const PLAYLISTS = [
+  { id: "p1", name: "Cooking — saved", visibility: "private", count: 500, written: 482 },
+  { id: "p2", name: "Watch later", visibility: "private", count: 1204, written: 0 },
+  { id: "p3", name: "Baking", visibility: "private", count: 63, written: 41 },
+  { id: "p4", name: "Weeknight dinners", visibility: "unlisted", count: 87, written: 87 },
+  { id: "p5", name: "Liked videos", visibility: "private", count: 3911, written: 0 }
+];
+const num = (n) => n.toLocaleString("en-US");
+
+const NOW = new Date("2026-07-28T09:00:00");
+const DATES = {
+  r1: ["2026-07-26", "2024-03-11"], r2: ["2026-07-23", "2024-01-18"], r3: ["2026-07-21", "2023-11-02"],
+  r4: ["2026-07-14", "2024-02-27"], r5: ["2026-07-12", "2023-12-08"], r6: ["2026-07-05", "2023-10-19"],
+  r7: ["2026-06-28", "2024-04-04"], r8: ["2026-06-20", "2024-06-15"], r9: ["2026-06-11", "2024-05-09"],
+  r10: ["2026-05-30", "2024-02-02"], r11: ["2026-05-18", "2024-07-22"], r12: ["2026-04-27", "2024-08-30"]
+};
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const addedAt = (id) => new Date(DATES[id][0] + "T09:00:00");
+const uploadedAt = (id) => new Date(DATES[id][1] + "T09:00:00");
+const ago = (d) => {
+  const days = Math.round((NOW - d) / 86400000);
+  if (days <= 1) return "yesterday";
+  if (days < 14) return days + " days ago";
+  if (days < 60) return Math.round(days / 7) + " weeks ago";
+  return Math.round(days / 30) + " months ago";
+};
+const fullDate = (d) => d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear();
+
+const CUISINES = ["Sichuan", "Chinese", "Japanese", "Korean", "Thai", "Indian", "Italian", "French", "Mexican", "American"];
+const MAINS = ["Beef", "Pork", "Chicken", "Seafood", "Tofu", "Vegetable", "Noodles"];
+
+class Component extends DCLogic {
+  state = {
+    screen: this.props.startScreen || "login",
+    recipeId: this.props.startRecipe || "r1",
+    query: "",
+    cuisine: [],
+    main: [],
+    sort: "added",
+    dir: "desc",
+    layout: null,
+    editing: false,
+    verifiedIds: [],
+    notes: {},
+    notesSaved: false,
+    overrides: {},
+    draft: null,
+    view: "library",
+    videoOpen: false,
+    // User preferences — these live on the account row in the database, and are
+    // edited on the Settings screen. Not build-time flags.
+    prefLayout: this.props.startLayout || "single",
+    prefTimestamps: true,
+    prefNewShelf: false,
+    playlistIds: ["p1", "p4"],
+    archived: [],
+    deleted: [],
+    confirming: false,
+    shareOpen: false,
+    shares: {},
+    copied: "",
+    cookStep: 0,
+    awake: true,
+    syncing: false,
+    syncStage: ""
+  };
+
+  go = (screen) => (e) => { if (e) e.preventDefault(); this.setState({ screen }); };
+
+  current() {
+    const base = RAW.find((r) => r.id === this.state.recipeId) || RAW[0];
+    const ov = this.state.overrides[base.id];
+    return ov ? Object.assign({}, base, ov) : base;
+  }
+
+  startEdit = () => {
+    const r = this.current();
+    this.setState({
+      draft: {
+        title: r.title,
+        ingredients: r.ingredients.map((i) => Object.assign({}, i)),
+        steps: r.steps.map((s) => Object.assign({}, s))
+      }
+    });
+  };
+
+  patchDraft(fn) {
+    const d = this.state.draft;
+    const next = { title: d.title, ingredients: d.ingredients.map((i) => Object.assign({}, i)), steps: d.steps.map((s) => Object.assign({}, s)) };
+    fn(next);
+    this.setState({ draft: next });
+  }
+
+  saveEdit = () => {
+    const d = this.state.draft;
+    const id = this.current().id;
+    this.setState({
+      overrides: Object.assign({}, this.state.overrides, { [id]: { title: d.title, ingredients: d.ingredients, steps: d.steps } }),
+      verifiedIds: this.state.verifiedIds.includes(id) ? this.state.verifiedIds : this.state.verifiedIds.concat(id),
+      draft: null
+    });
+  };
+
+  isVerified(r) {
+    return r.verified || this.state.verifiedIds.includes(r.id);
+  }
+
+  filtered() {
+    const q = this.state.query.trim().toLowerCase();
+    let list = RAW.filter((r) => {
+      if (this.state.archived.includes(r.id) || this.state.deleted.includes(r.id)) return false;
+      if (this.state.cuisine.length && !this.state.cuisine.includes(r.cuisine)) return false;
+      if (this.state.main.length && !this.state.main.includes(r.main)) return false;
+      if (!q) return true;
+      return (
+        r.title.toLowerCase().includes(q) ||
+        r.author.toLowerCase().includes(q) ||
+        r.cuisine.toLowerCase().includes(q) ||
+        r.main.toLowerCase().includes(q) ||
+        r.ingredients.some((i) => i.name.toLowerCase().includes(q))
+      );
+    });
+    const minutes = (r) => parseInt(r.time, 10) * (r.time.includes("hr") ? 60 : 1);
+    const asc = {
+      added: (a, b) => addedAt(a.id) - addedAt(b.id),
+      uploaded: (a, b) => uploadedAt(a.id) - uploadedAt(b.id),
+      time: (a, b) => minutes(a) - minutes(b)
+    }[this.state.sort];
+    const f = this.state.dir === "asc" ? 1 : -1;
+    return list.slice().sort((a, b) => f * asc(a, b));
+  }
+
+  toggle(key, value) {
+    return () => {
+      const list = this.state[key];
+      this.setState({ [key]: list.includes(value) ? list.filter((v) => v !== value) : list.concat(value) });
+    };
+  }
+
+  card = (r) => ({
+    id: r.id,
+    title: (this.state.overrides[r.id] || r).title,
+    dateLabel: this.state.sort === "uploaded" ? "uploaded " + fullDate(uploadedAt(r.id)) : "added " + ago(addedAt(r.id)),
+    hasStatus: !!STATUS[r.id],
+    statusNote: STATUS_TEXT[STATUS[r.id]] || "",
+    statusCls: STATUS[r.id] === "gone" ? "tag tag-outline" : "tag tag-neutral",
+    restore: () => this.setState({ archived: this.state.archived.filter((x) => x !== r.id) }),
+    purge: () => this.setState({ archived: this.state.archived.filter((x) => x !== r.id), deleted: this.state.deleted.concat(r.id) }),
+    author: r.author,
+    cuisine: r.cuisine,
+    main: r.main,
+    time: r.time,
+    addedLabel: ago(addedAt(r.id)),
+    flag: this.isVerified(r) ? "verified" : r.confidence + " confidence",
+    open: () => this.setState({ screen: "recipe", recipeId: r.id, draft: null, videoOpen: false })
+  });
+
+  slug(r) {
+    const base = r.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return base + "-" + Math.random().toString(16).slice(2, 6);
+  }
+
+  ensureLink = () => {
+    const r = this.current();
+    if (this.state.shares[r.id]) return;
+    this.setState({ shares: Object.assign({}, this.state.shares, { [r.id]: this.slug(r) }) });
+  };
+
+  runSync = () => {
+    const stages = ["Reading playlist items…", "3 new videos since last run", "Fetching transcripts…", "Writing up “Sichuan Wontons”…", "Done — 3 recipes added"];
+    let i = 0;
+    this.setState({ syncing: true, syncStage: stages[0] });
+    const tick = () => {
+      i += 1;
+      if (i >= stages.length) { this.setState({ syncing: false, syncStage: "" }); return; }
+      this.setState({ syncStage: stages[i] });
+      setTimeout(tick, 900);
+    };
+    setTimeout(tick, 900);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const r = this.current();
+    const showTs = s.prefTimestamps;
+    const layout = s.layout || s.prefLayout;
+    const list = this.filtered();
+    const verified = this.isVerified(r);
+    const steps = r.steps.map((st, i) => ({ n: i + 1, text: st.text, t: st.t, url: V + r.vid + "&t=" + st.t.replace(":", "m") + "s" }));
+    const cookStep = Math.min(s.cookStep, r.steps.length - 1);
+    const chosen = PLAYLISTS.filter((p) => s.playlistIds.includes(p.id));
+    const stepIngredients = r.ingredients
+      .filter((ing) => r.steps[cookStep].text.toLowerCase().includes(ing.name.split(",")[0].split(" ").pop().toLowerCase()))
+      .slice(0, 4)
+      .map((ing) => ing.qty + " " + ing.name.split(",")[0]);
+
+    return {
+      isLogin: s.screen === "login",
+      isCook: s.screen === "cook",
+      isApp: s.screen !== "login" && s.screen !== "cook" && s.screen !== "public",
+      isPublic: s.screen === "public",
+      exitPublic: () => this.setState({ screen: "recipe" }),
+      shareOpen: s.shareOpen,
+      openShare: () => { this.ensureLink(); this.setState({ shareOpen: true, copied: "" }); },
+      closeShare: () => this.setState({ shareOpen: false, copied: "" }),
+      shareUrl: "roux.cooking/r/" + (s.shares[r.id] || this.slug(r)),
+      copiedLinkLabel: s.copied === "link" ? "Link copied" : "Copy link",
+      copiedTextLabel: s.copied === "text" ? "Recipe copied" : "Copy as text",
+      copyLink: () => this.setState({ copied: "link" }),
+      copyText: () => this.setState({ copied: "text" }),
+      previewPublic: () => this.setState({ shareOpen: false, screen: "public" }),
+      revokeLink: () => {
+        const next = Object.assign({}, s.shares);
+        delete next[r.id];
+        this.setState({ shares: next, shareOpen: false });
+      },
+      sharedLinks: Object.keys(s.shares).map((id) => {
+        const rec = RAW.find((x) => x.id === id);
+        return {
+          title: (s.overrides[id] || rec).title,
+          url: "roux.cooking/r/" + s.shares[id],
+          revoke: () => {
+            const next = Object.assign({}, s.shares);
+            delete next[id];
+            this.setState({ shares: next });
+          }
+        };
+      }),
+      sharesEmpty: Object.keys(s.shares).length === 0,
+      isLibrary: s.screen === "library",
+      isRecipe: s.screen === "recipe",
+      isSync: s.screen === "sync",
+      isSettings: s.screen === "settings",
+
+      signIn: () => this.setState({ screen: "library" }),
+      signOut: () => this.setState({ screen: "login" }),
+      goLibrary: this.go("library"),
+      goSync: this.go("sync"),
+      goSettings: this.go("settings"),
+      navLibraryCur: s.screen === "library" || s.screen === "recipe" ? "page" : "false",
+      navSyncCur: s.screen === "sync" ? "page" : "false",
+      navSettingsCur: s.screen === "settings" ? "page" : "false",
+
+      query: s.query,
+      setQuery: (e) => this.setState({ query: e.target.value }),
+      totalLabel: RAW.length + " of 500 recipes written up",
+      lastSyncAgo: "2 hours ago",
+      resultLabel: list.length + " shown",
+      isEmpty: s.view === "library" && list.length === 0,
+      hasFilters: s.cuisine.length > 0 || s.main.length > 0 || s.query.length > 0,
+      clearFilters: () => this.setState({ cuisine: [], main: [], query: "" }),
+      showNewShelf: s.prefNewShelf && s.view === "library" && !this.state.query && !s.cuisine.length && !s.main.length,
+      visibleGridRecipes: s.view === "library" ? list.map(this.card) : [],
+      newCount: 3,
+      newRecipes: RAW.slice(0, 3).map(this.card),
+      visibleRecipes: list.map(this.card),
+      allCuisines: CUISINES,
+
+      cuisineChips: CUISINES.map((c) => ({
+        label: c,
+        cls: s.cuisine.includes(c) ? "btn btn-primary" : "tag tag-neutral",
+        toggle: this.toggle("cuisine", c)
+      })),
+      mainChips: MAINS.map((c) => ({
+        label: c,
+        cls: s.main.includes(c) ? "btn btn-primary" : "tag tag-neutral",
+        toggle: this.toggle("main", c)
+      })),
+      sortAddedChecked: s.sort === "added",
+      sortUploadedChecked: s.sort === "uploaded",
+      sortTimeChecked: s.sort === "time",
+      sortByAdded: () => this.setState({ sort: "added", dir: "desc" }),
+      sortByUploaded: () => this.setState({ sort: "uploaded", dir: "desc" }),
+      sortByTime: () => this.setState({ sort: "time", dir: "asc" }),
+      toggleDir: () => this.setState({ dir: s.dir === "asc" ? "desc" : "asc" }),
+      dirLabel: s.sort === "time"
+        ? (s.dir === "asc" ? "Quickest first" : "Longest first")
+        : (s.dir === "asc" ? "Oldest first" : "Newest first"),
+      dirArrow: s.dir === "asc" ? "rotate(180deg)" : "rotate(0deg)",
+
+      recipe: {
+        title: r.title,
+        videoTitle: r.videoTitle,
+        author: r.author,
+        cuisine: r.cuisine,
+        main: r.main,
+        time: r.time,
+        servings: r.servings,
+        uploadedLabel: fullDate(uploadedAt(r.id)),
+        addedLabel: ago(addedAt(r.id)),
+        confidence: r.confidence,
+        url: V + r.vid
+      },
+      ingredients: r.ingredients,
+      ingredientCount: r.ingredients.length + " items",
+      steps,
+      tsDisplay: showTs && STATUS[r.id] !== "gone" ? "inline" : "none",
+      tsDeadDisplay: STATUS[r.id] === "gone" ? "inline" : "none",
+      isSingle: layout === "single" && !s.draft,
+      isSplit: layout === "split" && !s.draft,
+      isEditing: !!s.draft,
+      draftTitle: s.draft ? s.draft.title : "",
+      draftIngredients: s.draft
+        ? s.draft.ingredients.map((ing, i) => ({
+            qty: ing.qty,
+            name: ing.name,
+            onQty: (e) => this.patchDraft((d) => { d.ingredients[i].qty = e.target.value; }),
+            onName: (e) => this.patchDraft((d) => { d.ingredients[i].name = e.target.value; }),
+            remove: () => this.patchDraft((d) => { d.ingredients.splice(i, 1); })
+          }))
+        : [],
+      draftSteps: s.draft
+        ? s.draft.steps.map((st, i) => ({
+            n: i + 1,
+            t: st.t,
+            text: st.text,
+            onText: (e) => this.patchDraft((d) => { d.steps[i].text = e.target.value; }),
+            remove: () => this.patchDraft((d) => { d.steps.splice(i, 1); })
+          }))
+        : [],
+      setDraftTitle: (e) => this.patchDraft((d) => { d.title = e.target.value; }),
+      addIngredient: () => this.patchDraft((d) => { d.ingredients.push({ qty: "", name: "" }); }),
+      addStep: () => this.patchDraft((d) => { d.steps.push({ t: "0:00", text: "" }); }),
+      saveEdit: this.saveEdit,
+      cancelEdit: () => this.setState({ draft: null }),
+      layoutSingleChecked: layout === "single",
+      layoutSplitChecked: layout === "split",
+      useSingle: () => this.setState({ layout: "single" }),
+      useSplit: () => this.setState({ layout: "split" }),
+      verifyLabel: verified ? "verified by me" : r.confidence + " confidence",
+      verifyTagCls: verified ? "tag tag-neutral" : "tag tag-outline",
+      isLibraryView: s.view === "library",
+      isArchiveView: s.view === "archive",
+      viewLibraryChecked: s.view === "library",
+      viewArchiveChecked: s.view === "archive",
+      useLibraryView: () => this.setState({ view: "library" }),
+      useArchiveView: () => this.setState({ view: "archive" }),
+      archiveCount: s.archived.length,
+      archiveLabel: "Archive · " + s.archived.length,
+      archivedRecipes: RAW.filter((x) => s.archived.includes(x.id)).map(this.card),
+      archiveEmpty: s.archived.length === 0,
+
+      videoGone: STATUS[r.id] === "gone",
+      videoPlayable: STATUS[r.id] !== "gone",
+      videoExpanded: STATUS[r.id] !== "gone" && s.videoOpen,
+      toggleVideo: () => this.setState({ videoOpen: !s.videoOpen }),
+      videoToggleLabel: s.videoOpen ? "Hide video" : "Watch the video",
+      videoChevron: s.videoOpen ? "rotate(180deg)" : "rotate(0deg)",
+      hasVideoIssue: !!STATUS[r.id],
+      videoStatusNote: STATUS[r.id] === "gone"
+        ? "The uploader took this video down, so the link is dead. The write-up, your notes and the timestamps stay — they're yours now. Roux keeps the channel name and the original video title for searching."
+        : "You removed this from the playlist, but the recipe stays in your library until you archive it. The video still plays.",
+      askRemove: () => this.setState({ confirming: true }),
+      confirming: s.confirming,
+      cancelRemove: () => this.setState({ confirming: false }),
+      confirmArchive: () => this.setState({ confirming: false, screen: "library", view: "library", archived: s.archived.concat(r.id) }),
+      confirmDelete: () => this.setState({ confirming: false, screen: "library", view: "library", deleted: s.deleted.concat(r.id) }),
+
+      notEditing: !s.draft,
+      showUnverified: !verified && !s.draft,
+      prefLayoutSingle: s.prefLayout === "single",
+      prefLayoutSplit: s.prefLayout === "split",
+      setPrefSingle: () => this.setState({ prefLayout: "single", layout: null }),
+      setPrefSplit: () => this.setState({ prefLayout: "split", layout: null }),
+      prefTsOn: s.prefTimestamps,
+      prefTsOff: !s.prefTimestamps,
+      setTsOn: () => this.setState({ prefTimestamps: true }),
+      setTsOff: () => this.setState({ prefTimestamps: false }),
+      playlistName: chosen.length === 0 ? "No playlist selected" : chosen.length === 1 ? chosen[0].name : chosen.length + " playlists",
+      playlistMeta: chosen.length === 0
+        ? "Pick at least one in Settings"
+        : num(chosen.reduce((n, p) => n + p.count, 0)) + " videos · " + num(chosen.reduce((n, p) => n + p.written, 0)) + " written up",
+      chosenPlaylists: chosen.map((p) => ({ name: p.name })),
+      playlistCountLabel: chosen.length === 1 ? "1 playlist selected" : chosen.length + " playlists selected",
+      playlists: PLAYLISTS.map((p) => ({
+        id: p.id,
+        name: p.name,
+        meta: p.visibility + " · " + num(p.count) + " videos",
+        checked: s.playlistIds.includes(p.id),
+        unchecked: !s.playlistIds.includes(p.id),
+        select: () => this.setState({
+          playlistIds: s.playlistIds.includes(p.id) ? s.playlistIds.filter((x) => x !== p.id) : s.playlistIds.concat(p.id)
+        })
+      })),
+      prefNewOn: s.prefNewShelf,
+      prefNewOff: !s.prefNewShelf,
+      setNewOn: () => this.setState({ prefNewShelf: true }),
+      setNewOff: () => this.setState({ prefNewShelf: false }),
+      markVerified: () => this.setState({ verifiedIds: s.verifiedIds.concat(r.id) }),
+      editLabel: s.draft ? "Cancel edit" : "Edit recipe",
+      toggleEdit: () => (s.draft ? this.setState({ draft: null }) : this.startEdit()),
+      searchAuthor: (e) => { e.preventDefault(); this.setState({ screen: "library", query: r.author, cuisine: [], main: [] }); },
+      notes: s.notes[r.id] || "",
+      setNotes: (e) => this.setState({ notes: Object.assign({}, s.notes, { [r.id]: e.target.value }), notesSaved: true }),
+      notesStatus: s.notesSaved ? "Saved to this recipe" : "Only you can see these",
+
+      startCook: () => this.setState({ screen: "cook", cookStep: 0 }),
+      exitCook: () => this.setState({ screen: "recipe" }),
+      cookStepLabel: cookStep + 1 + " of " + r.steps.length,
+      cookStepText: r.steps[cookStep].text,
+      cookStepTime: r.steps[cookStep].t,
+      cookStepUrl: V + r.vid + "&t=" + r.steps[cookStep].t.replace(":", "m") + "s",
+      cookStepIngredients: stepIngredients.length ? stepIngredients : [r.ingredients[0].qty + " " + r.ingredients[0].name.split(",")[0]],
+      stepDots: r.steps.map((_, i) => ({ bg: i <= cookStep ? "var(--color-accent)" : "var(--color-neutral-300)" })),
+      nextLabel: cookStep === r.steps.length - 1 ? "Finish" : "Next step",
+      nextStep: () => {
+        if (cookStep === r.steps.length - 1) this.setState({ screen: "recipe" });
+        else this.setState({ cookStep: cookStep + 1 });
+      },
+      prevStep: () => this.setState({ cookStep: Math.max(0, cookStep - 1) }),
+      awakeLabel: s.awake ? "Screen on" : "Screen auto",
+      toggleAwake: () => this.setState({ awake: !s.awake }),
+
+      syncing: s.syncing,
+      syncStage: s.syncStage,
+      syncLabel: s.syncing ? "Syncing…" : "Sync now",
+      runSync: this.runSync,
+      syncHistory: [
+        { when: "Today, 06:00", found: 3, written: 3, skipped: 0, result: "ok", cls: "tag tag-accent-2" },
+        { when: "Yesterday, 18:00", found: 0, written: 0, skipped: 0, result: "no change", cls: "tag tag-neutral" },
+        { when: "Yesterday, 12:00", found: 2, written: 1, skipped: 1, result: "1 no transcript", cls: "tag tag-outline" },
+        { when: "Jul 27, 06:00", found: 0, written: 0, skipped: 0, result: "1 video gone — kept", cls: "tag tag-neutral" },
+        { when: "Jul 26, 06:00", found: 1, written: 1, skipped: 0, result: "ok", cls: "tag tag-accent-2" },
+        { when: "Jul 25, 18:00", found: 4, written: 4, skipped: 0, result: "ok", cls: "tag tag-accent-2" },
+        { when: "Jul 25, 06:00", found: 0, written: 0, skipped: 0, result: "quota hit", cls: "tag tag-outline" }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
