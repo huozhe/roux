@@ -20,6 +20,7 @@ import {
   users,
   type RecipeRow,
 } from "@/lib/db";
+import { mergeLearnedCategories } from "@/lib/categories";
 import { makeShareSlug } from "@/lib/format";
 import type {
   Ingredient,
@@ -201,7 +202,106 @@ export async function patchRecipe(
     .set(sets)
     .where(owned(userId, id))
     .returning();
-  return updated[0] ? rowToRecipe(updated[0]) : null;
+  const recipe = updated[0] ? rowToRecipe(updated[0]) : null;
+  if (
+    recipe &&
+    (patch.cuisine !== undefined || patch.main_ingredient !== undefined)
+  ) {
+    await learnCategoriesFromLabels(userId, {
+      cuisine: recipe.cuisine,
+      main: recipe.main_ingredient,
+    }).catch(() => {
+      /* non-fatal */
+    });
+  }
+  return recipe;
+}
+
+/**
+ * Persist novel cuisine / main labels from the LLM (or edits) into user prefs
+ * so library chips and Settings categories grow automatically.
+ */
+export async function learnCategoriesFromLabels(
+  userId: string,
+  labels: { cuisine?: string | null; main?: string | null },
+): Promise<UserPrefs | null> {
+  const current = await getUserPrefs(userId);
+  const merged = mergeLearnedCategories(current, labels);
+  if (!merged) return null;
+  return updateUserPrefs(userId, merged);
+}
+
+/** Distinct non-null cuisine / main values across the user's active recipes. */
+export async function listDistinctCategoryLabels(
+  userId: string,
+): Promise<{ cuisines: string[]; mains: string[] }> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      cuisine: recipes.cuisine,
+      main: recipes.mainIngredient,
+    })
+    .from(recipes)
+    .where(and(eq(recipes.userId, userId), isNull(recipes.deletedAt)));
+
+  const cuisineKeys = new Set<string>();
+  const mainKeys = new Set<string>();
+  const cuisines: string[] = [];
+  const mains: string[] = [];
+  for (const r of rows) {
+    const c = r.cuisine?.trim();
+    if (c) {
+      const k = c.toLowerCase();
+      if (!cuisineKeys.has(k)) {
+        cuisineKeys.add(k);
+        cuisines.push(c);
+      }
+    }
+    const m = r.main?.trim();
+    if (m) {
+      const k = m.toLowerCase();
+      if (!mainKeys.has(k)) {
+        mainKeys.add(k);
+        mains.push(m);
+      }
+    }
+  }
+  return { cuisines, mains };
+}
+
+/** Fold recipe labels into prefs (idempotent backfill + Settings sync). */
+export async function learnCategoriesFromUserRecipes(
+  userId: string,
+): Promise<UserPrefs | null> {
+  const { cuisines, mains } = await listDistinctCategoryLabels(userId);
+  const current = await getUserPrefs(userId);
+  let customCuisines = [...(current.customCuisines ?? [])];
+  let customMains = [...(current.customMains ?? [])];
+  let dirty = false;
+  for (const cuisine of cuisines) {
+    const merged = mergeLearnedCategories(
+      { customCuisines, customMains },
+      { cuisine },
+    );
+    if (merged) {
+      customCuisines = merged.customCuisines;
+      customMains = merged.customMains;
+      dirty = true;
+    }
+  }
+  for (const main of mains) {
+    const merged = mergeLearnedCategories(
+      { customCuisines, customMains },
+      { main },
+    );
+    if (merged) {
+      customCuisines = merged.customCuisines;
+      customMains = merged.customMains;
+      dirty = true;
+    }
+  }
+  if (!dirty) return null;
+  return updateUserPrefs(userId, { customCuisines, customMains });
 }
 
 export async function verifyRecipe(

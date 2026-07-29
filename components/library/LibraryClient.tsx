@@ -43,14 +43,25 @@ export function LibraryClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const livePrefs = useLivePrefs(prefs);
   const showNewShelf = Boolean(livePrefs.newShelf);
-  const cuisineOptions = useMemo(
-    () => categoryOptions(CUISINES, livePrefs.customCuisines),
-    [livePrefs.customCuisines],
-  );
-  const mainOptions = useMemo(
-    () => categoryOptions(MAINS, livePrefs.customMains),
-    [livePrefs.customMains],
-  );
+  // Prefs customs (manual + learned from LLM) plus any labels already on recipes.
+  const cuisineOptions = useMemo(() => {
+    const fromRecipes = recipes
+      .map((r) => r.cuisine)
+      .filter((v): v is string => Boolean(v?.trim()));
+    return categoryOptions(CUISINES, [
+      ...(livePrefs.customCuisines ?? []),
+      ...fromRecipes,
+    ]);
+  }, [livePrefs.customCuisines, recipes]);
+  const mainOptions = useMemo(() => {
+    const fromRecipes = recipes
+      .map((r) => r.main_ingredient)
+      .filter((v): v is string => Boolean(v?.trim()));
+    return categoryOptions(MAINS, [
+      ...(livePrefs.customMains ?? []),
+      ...fromRecipes,
+    ]);
+  }, [livePrefs.customMains, recipes]);
 
   const archiveCount = useMemo(
     () => recipes.filter((r) => r.archived_at != null).length,

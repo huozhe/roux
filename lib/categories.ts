@@ -1,4 +1,4 @@
-/** Controlled lists for cuisine / main chips. Users may extend via prefs. */
+/** Built-in cuisine / main chips. LLM + user labels extend via prefs.custom*. */
 export const CUISINES = [
   "Sichuan",
   "Chinese",
@@ -25,7 +25,12 @@ export const MAINS = [
 export type Cuisine = (typeof CUISINES)[number];
 export type MainIngredient = (typeof MAINS)[number];
 
-/** Base list + user customs (deduped, case-insensitive). */
+const BASE_CUISINE_KEYS = new Set(
+  CUISINES.map((s) => s.toLowerCase()),
+);
+const BASE_MAIN_KEYS = new Set(MAINS.map((s) => s.toLowerCase()));
+
+/** Base list + extra labels (deduped, case-insensitive). */
 export function categoryOptions(
   base: readonly string[],
   custom?: string[] | null,
@@ -41,4 +46,42 @@ export function categoryOptions(
     out.push(t);
   }
   return out;
+}
+
+/**
+ * Merge novel cuisine/main labels into custom lists (skip base list items).
+ * Pure — returns null if nothing new.
+ */
+export function mergeLearnedCategories(
+  current: { customCuisines?: string[]; customMains?: string[] },
+  labels: { cuisine?: string | null; main?: string | null },
+): { customCuisines: string[]; customMains: string[] } | null {
+  const customCuisines = [...(current.customCuisines ?? [])];
+  const customMains = [...(current.customMains ?? [])];
+  const cuisineKeys = new Set(customCuisines.map((s) => s.toLowerCase()));
+  const mainKeys = new Set(customMains.map((s) => s.toLowerCase()));
+  let dirty = false;
+
+  const cuisine = labels.cuisine?.trim();
+  if (cuisine) {
+    const key = cuisine.toLowerCase();
+    if (!BASE_CUISINE_KEYS.has(key) && !cuisineKeys.has(key)) {
+      customCuisines.push(cuisine);
+      cuisineKeys.add(key);
+      dirty = true;
+    }
+  }
+
+  const main = labels.main?.trim();
+  if (main) {
+    const key = main.toLowerCase();
+    if (!BASE_MAIN_KEYS.has(key) && !mainKeys.has(key)) {
+      customMains.push(main);
+      mainKeys.add(key);
+      dirty = true;
+    }
+  }
+
+  if (!dirty) return null;
+  return { customCuisines, customMains };
 }

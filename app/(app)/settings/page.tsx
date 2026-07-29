@@ -10,6 +10,7 @@ import { categoryOptions, CUISINES, MAINS } from "@/lib/categories";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   getUserPrefs,
+  learnCategoriesFromUserRecipes,
   listShareLinks,
 } from "@/lib/recipes/queries";
 import { DEFAULT_PREFS } from "@/lib/types";
@@ -44,6 +45,8 @@ export default async function SettingsPage() {
 
   if (hasDb && userId) {
     try {
+      // Fold any cuisine/main already on recipes into prefs (LLM labels).
+      await learnCategoriesFromUserRecipes(userId).catch(() => null);
       prefs = await getUserPrefs(userId);
       const links = await listShareLinks(userId);
       shareLinks = links.map((l) => ({

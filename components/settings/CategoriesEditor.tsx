@@ -70,8 +70,9 @@ export function CategoriesEditor({
     <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
       <h4 style={{ margin: 0 }}>Categories</h4>
       <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-        Cuisine and main-ingredient tags are guessed per recipe and editable on
-        the recipe page. Add your own to have them offered as options.
+        Tags are guessed by the model when a video is written up and saved here
+        automatically when new. You can also add your own. Filter chips on the
+        library use this list.
         {status ? ` · ${status}` : ""}
       </p>
 

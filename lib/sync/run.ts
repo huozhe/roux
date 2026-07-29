@@ -10,6 +10,7 @@ import {
   recipes,
   syncRuns,
 } from "@/lib/db";
+import { learnCategoriesFromLabels } from "@/lib/recipes/queries";
 import type { Confidence, Ingredient, Step } from "@/lib/types";
 import { canWriteExtract, shouldSkipVideo } from "@/lib/sync/decisions";
 import {
@@ -386,6 +387,13 @@ export async function runSyncForUser(
               ),
             );
         }
+
+        await learnCategoriesFromLabels(userId, {
+          cuisine: extracted.cuisine,
+          main: extracted.main_ingredient,
+        }).catch(() => {
+          /* non-fatal: recipe write already succeeded */
+        });
 
         written += 1;
         processedNew += 1;
