@@ -17,7 +17,7 @@ export type ExtractOpts = {
   model?: string;
 };
 
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 function textFromMessage(msg: Anthropic.Message): string {
   return msg.content

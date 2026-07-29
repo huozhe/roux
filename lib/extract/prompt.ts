@@ -20,7 +20,8 @@ Return ONLY a single JSON object (no markdown, no commentary) with this shape:
 
 Rules:
 - title: short, human recipe name (not the video title).
-- Each step MUST include t_seconds = the caption cue start time (seconds) where that action begins. Use the nearest cue from the transcript.
+- steps: consolidate into fewer, kitchen-usable actions. Target 5–9 steps; hard limit fewer than 10 total. Merge prep, seasoning, and continuous cooking into single steps when they form one phase. Do not write one step per caption line.
+- Each step MUST include t_seconds = the caption cue start time (seconds) where that phase begins. Use the nearest cue from the transcript.
 - ingredients.qty: use the amount stated in captions. If the amount was not stated, invent a reasonable qty and set inferred: true.
 - confidence: high = clear quantities + ordered steps; medium = some gaps/inferred; low = sparse or ambiguous transcript.
 - cuisine / main_ingredient: set when reasonably clear, else null.
