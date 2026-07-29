@@ -10,14 +10,16 @@ import type {
   Recipe,
   SortDir,
   SortKey,
+  UserPrefs,
 } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
 import { RecipeCard } from "./RecipeCard";
 
 type Props = {
-  /** Full fixture set (library + archive); filters applied client-side. */
+  /** Full set (library + archive); filters applied client-side. */
   recipes: Recipe[];
   lastSyncLabel?: string;
+  prefs?: UserPrefs;
 };
 
 function defaultDir(sort: SortKey): SortDir {
@@ -25,16 +27,20 @@ function defaultDir(sort: SortKey): SortDir {
 }
 
 export function LibraryClient({
-  recipes,
-  lastSyncLabel = "2 hours ago",
+  recipes: initialRecipes,
+  lastSyncLabel = "never",
+  prefs = DEFAULT_PREFS,
 }: Props) {
+  const [recipes, setRecipes] = useState(initialRecipes);
   const [query, setQuery] = useState("");
   const [cuisine, setCuisine] = useState<string[]>([]);
   const [main, setMain] = useState<string[]>([]);
   const [sort, setSort] = useState<SortKey>("added");
   const [dir, setDir] = useState<SortDir>("desc");
   const [view, setView] = useState<LibraryView>("library");
-  const showNewShelf = DEFAULT_PREFS.newShelf;
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const showNewShelf = prefs.newShelf;
 
   const archiveCount = useMemo(
     () => recipes.filter((r) => r.archived_at != null).length,
@@ -58,6 +64,47 @@ export function LibraryClient({
       }),
     [recipes, query, cuisine, main, sort, dir, view],
   );
+
+  async function restoreRecipe(id: string) {
+    setActionId(id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/recipes/${id}/restore`, { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        recipe?: Recipe;
+      };
+      if (!res.ok || !body.recipe) {
+        setActionError(body.error ?? "Restore failed");
+        return;
+      }
+      setRecipes((prev) =>
+        prev.map((r) => (r.id === id ? body.recipe! : r)),
+      );
+    } catch {
+      setActionError("Restore failed");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function deleteRecipe(id: string) {
+    setActionId(id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/recipes/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setActionError(body.error ?? "Delete failed");
+        return;
+      }
+      setRecipes((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      setActionError("Delete failed");
+    } finally {
+      setActionId(null);
+    }
+  }
 
   const hasFilters =
     cuisine.length > 0 || main.length > 0 || query.trim().length > 0;
@@ -432,6 +479,11 @@ export function LibraryClient({
               video is still in the playlist.
             </p>
           </div>
+          {actionError ? (
+            <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-accent-700)" }}>
+              {actionError}
+            </p>
+          ) : null}
           {archiveEmpty ? (
             <div
               className="card"
@@ -481,17 +533,17 @@ export function LibraryClient({
                   type="button"
                   className="btn btn-secondary"
                   style={{ marginTop: 0 }}
-                  disabled
-                  title="Restore wires at M4"
+                  disabled={actionId === r.id}
+                  onClick={() => void restoreRecipe(r.id)}
                 >
-                  Restore
+                  {actionId === r.id ? "…" : "Restore"}
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost"
                   style={{ fontFamily: "var(--font-body)", fontSize: 13 }}
-                  disabled
-                  title="Delete wires at M4"
+                  disabled={actionId === r.id}
+                  onClick={() => void deleteRecipe(r.id)}
                 >
                   Delete now
                 </button>

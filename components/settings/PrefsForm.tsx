@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DEFAULT_PREFS } from "@/lib/types";
 import type { RecipeLayout, UserPrefs } from "@/lib/types";
 
 type PrefsFormProps = {
   initial?: UserPrefs;
-  /** Optional persist hook; local-only until /api/prefs lands. */
+  /** Optional extra hook after local update (e.g. parent state). */
   onChange?: (prefs: UserPrefs) => void;
 };
 
@@ -15,13 +15,42 @@ export function PrefsForm({
   onChange,
 }: PrefsFormProps) {
   const [prefs, setPrefs] = useState<UserPrefs>(initial);
+  const [status, setStatus] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function update(patch: Partial<UserPrefs>) {
     setPrefs((prev) => {
       const next = { ...prev, ...patch };
       onChange?.(next);
+      if (timer.current) clearTimeout(timer.current);
+      setStatus("Saving…");
+      timer.current = setTimeout(() => {
+        void persist(next);
+      }, 400);
       return next;
     });
+  }
+
+  async function persist(next: UserPrefs) {
+    try {
+      const res = await fetch("/api/prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          layout: next.layout,
+          timestamps: next.timestamps,
+          newShelf: next.newShelf,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setStatus(body.error ?? "Couldn’t save");
+        return;
+      }
+      setStatus("Saved");
+    } catch {
+      setStatus("Couldn’t save");
+    }
   }
 
   return (
@@ -102,6 +131,7 @@ export function PrefsForm({
 
       <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
         Saved to your account, so the phone in the kitchen and the laptop agree.
+        {status ? ` · ${status}` : ""}
       </p>
     </div>
   );

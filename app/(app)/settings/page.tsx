@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { AccountCard } from "@/components/settings/AccountCard";
 import { CategoriesEditor } from "@/components/settings/CategoriesEditor";
 import { ExportButtons } from "@/components/settings/ExportButtons";
@@ -5,13 +6,65 @@ import { PlaylistPicker } from "@/components/settings/PlaylistPicker";
 import { PrefsForm } from "@/components/settings/PrefsForm";
 import { ShareLinksList } from "@/components/settings/ShareLinksList";
 import { auth } from "@/lib/auth";
+import { CUISINES, MAINS } from "@/lib/categories";
+import {
+  getUserPrefs,
+  listShareLinks,
+} from "@/lib/recipes/queries";
+import { DEFAULT_PREFS } from "@/lib/types";
 
 export const metadata = {
   title: "Settings · Roux",
 };
 
+async function publicOrigin(): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    if (host) return `${proto}://${host}`;
+  } catch {
+    /* ignore */
+  }
+  if (process.env.AUTH_URL) return process.env.AUTH_URL.replace(/\/$/, "");
+  return "";
+}
+
 export default async function SettingsPage() {
   const session = await auth().catch(() => null);
+  const userId = session?.user?.id;
+  const hasDb = Boolean(process.env.DATABASE_URL && userId);
+  const origin = await publicOrigin();
+
+  let prefs = DEFAULT_PREFS;
+  let shareLinks: Array<{ slug: string; title: string; url: string }> = [];
+
+  if (hasDb && userId) {
+    try {
+      prefs = await getUserPrefs(userId);
+      const links = await listShareLinks(userId);
+      shareLinks = links.map((l) => ({
+        slug: l.slug,
+        title: l.title,
+        url: origin ? `${origin}/r/${l.slug}` : `/r/${l.slug}`,
+      }));
+    } catch {
+      /* keep defaults */
+    }
+  }
+
+  const cuisineOptions = [
+    ...CUISINES,
+    ...(prefs.customCuisines ?? []).filter(
+      (c) => !(CUISINES as readonly string[]).includes(c),
+    ),
+  ];
+  const mainOptions = [
+    ...MAINS,
+    ...(prefs.customMains ?? []).filter(
+      (m) => !(MAINS as readonly string[]).includes(m),
+    ),
+  ];
 
   return (
     <div
@@ -59,7 +112,7 @@ export default async function SettingsPage() {
 
         <PlaylistPicker />
 
-        <PrefsForm />
+        <PrefsForm initial={prefs} />
 
         <div className="card elev-sm" style={{ padding: 22, gap: "8.8px" }}>
           <h4 style={{ margin: 0 }}>When a video disappears</h4>
@@ -76,11 +129,14 @@ export default async function SettingsPage() {
           </p>
         </div>
 
-        <ShareLinksList />
+        <ShareLinksList initialLinks={shareLinks} />
 
         <ExportButtons />
 
-        <CategoriesEditor />
+        <CategoriesEditor
+          initialCuisines={cuisineOptions}
+          initialMains={mainOptions}
+        />
       </div>
     </div>
   );

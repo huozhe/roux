@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { IngredientsList } from "@/components/recipe/IngredientsList";
-import { getSharedRecipeBySlug } from "@/lib/fixtures/shares";
+import { getSharedRecipeBySlug } from "@/lib/data/shares";
 import {
   formatCookMinutes,
   formatTimestamp,
@@ -19,7 +19,7 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const recipe = getSharedRecipeBySlug(slug);
+  const recipe = await getSharedRecipeBySlug(slug);
   if (!recipe) {
     return {
       title: "Shared recipe · Roux",
@@ -285,7 +285,7 @@ function PublicRecipeBody({ recipe }: { recipe: Recipe }) {
 
 export default async function PublicSharePage({ params }: PageProps) {
   const { slug } = await params;
-  const recipe = getSharedRecipeBySlug(slug);
+  const recipe = await getSharedRecipeBySlug(slug);
   if (!recipe) notFound();
 
   return (

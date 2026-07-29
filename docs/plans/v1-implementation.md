@@ -465,11 +465,11 @@ SSE stages match prototype copy.
 
 **One agent** (or carefully sequenced):
 
-- [ ] Point `lib/data/*` at live APIs
-- [ ] Wire Library/Recipe/Cook mutations (PATCH, archive, share)
-- [ ] Wire Sync page to SSE
-- [ ] Wire Settings playlists/prefs/shares to APIs
-- [ ] Drop fixture-only paths from prod entry (keep fixtures for Story/tests)
+- [x] Point `lib/data/*` at live APIs
+- [x] Wire Library/Recipe/Cook mutations (PATCH, archive, share)
+- [x] Wire Sync page to SSE
+- [x] Wire Settings playlists/prefs/shares to APIs
+- [x] Drop fixture-only paths from prod entry (keep fixtures for Story/tests)
 - [ ] E2E manual: login → playlist → sync → cook → share → revoke
 - [ ] Commit → M4
 

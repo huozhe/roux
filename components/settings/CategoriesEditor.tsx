@@ -14,13 +14,43 @@ export function CategoriesEditor({
 }: CategoriesEditorProps) {
   const [cuisines, setCuisines] = useState(initialCuisines);
   const [mains, setMains] = useState(initialMains);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function persist(
+    nextCuisines: string[],
+    nextMains: string[],
+  ) {
+    setStatus("Saving…");
+    try {
+      const baseCuisines = CUISINES as readonly string[];
+      const baseMains = MAINS as readonly string[];
+      const res = await fetch("/api/prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customCuisines: nextCuisines.filter((c) => !baseCuisines.includes(c)),
+          customMains: nextMains.filter((m) => !baseMains.includes(m)),
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setStatus(body.error ?? "Couldn’t save");
+        return;
+      }
+      setStatus("Saved");
+    } catch {
+      setStatus("Couldn’t save");
+    }
+  }
 
   function addCuisine() {
     const name = window.prompt("Add a cuisine tag");
     const trimmed = name?.trim();
     if (!trimmed) return;
     if (cuisines.some((c) => c.toLowerCase() === trimmed.toLowerCase())) return;
-    setCuisines((prev) => [...prev, trimmed]);
+    const next = [...cuisines, trimmed];
+    setCuisines(next);
+    void persist(next, mains);
   }
 
   function addMain() {
@@ -28,7 +58,9 @@ export function CategoriesEditor({
     const trimmed = name?.trim();
     if (!trimmed) return;
     if (mains.some((m) => m.toLowerCase() === trimmed.toLowerCase())) return;
-    setMains((prev) => [...prev, trimmed]);
+    const next = [...mains, trimmed];
+    setMains(next);
+    void persist(cuisines, next);
   }
 
   return (
@@ -37,6 +69,7 @@ export function CategoriesEditor({
       <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
         Cuisine and main-ingredient tags are guessed per recipe and editable on
         the recipe page. Add your own to have them offered as options.
+        {status ? ` · ${status}` : ""}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

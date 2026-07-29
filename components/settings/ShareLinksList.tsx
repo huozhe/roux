@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export type SharedLink = {
   slug: string;
   title: string;
@@ -7,14 +9,33 @@ export type SharedLink = {
 };
 
 type ShareLinksListProps = {
-  links?: SharedLink[];
-  onRevoke?: (slug: string) => void;
+  /** Server-provided list of active shares. */
+  initialLinks?: SharedLink[];
 };
 
-export function ShareLinksList({
-  links = [],
-  onRevoke,
-}: ShareLinksListProps) {
+export function ShareLinksList({ initialLinks = [] }: ShareLinksListProps) {
+  const [links, setLinks] = useState<SharedLink[]>(initialLinks);
+  const [busySlug, setBusySlug] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onRevoke(slug: string) {
+    setBusySlug(slug);
+    setError(null);
+    try {
+      const res = await fetch(`/api/share/${slug}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(body.error ?? "Couldn’t revoke link");
+        return;
+      }
+      setLinks((prev) => prev.filter((l) => l.slug !== slug));
+    } catch {
+      setError("Couldn’t revoke link");
+    } finally {
+      setBusySlug(null);
+    }
+  }
+
   const empty = links.length === 0;
 
   return (
@@ -32,6 +53,12 @@ export function ShareLinksList({
           Read-only pages you&apos;ve handed out
         </span>
       </div>
+
+      {error ? (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--color-accent-700)" }}>
+          {error}
+        </p>
+      ) : null}
 
       {empty ? (
         <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
@@ -70,9 +97,10 @@ export function ShareLinksList({
               type="button"
               className="btn btn-secondary"
               style={{ marginTop: 0 }}
-              onClick={() => onRevoke?.(l.slug)}
+              disabled={busySlug === l.slug}
+              onClick={() => void onRevoke(l.slug)}
             >
-              Kill link
+              {busySlug === l.slug ? "…" : "Kill link"}
             </button>
           </div>
         ))

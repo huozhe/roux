@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IngredientsList } from "@/components/recipe/IngredientsList";
 import {
   formatCookMinutes,
   formatQty,
   formatTimestamp,
   fullDate,
-  makeShareSlug,
   relativeAgo,
   youtubeEmbedUrl,
   youtubeStepUrl,
@@ -22,18 +21,57 @@ type Draft = {
   steps: Step[];
 };
 
+type RemoveMode = "archive" | "delete" | null;
+
+async function apiJson<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (res.status === 204) {
+      return { ok: true, data: undefined as T };
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      recipe?: Recipe;
+      slug?: string;
+    };
+    if (!res.ok) {
+      return { ok: false, error: body.error ?? `Request failed (${res.status})` };
+    }
+    return { ok: true, data: body as T };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
 export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
   const [recipe, setRecipe] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [notes, setNotes] = useState(recipe.notes ?? "");
-  const [notesTouched, setNotesTouched] = useState(false);
+  const [notesStatus, setNotesStatus] = useState("Only you can see these");
   const [videoOpen, setVideoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
   const [copied, setCopied] = useState<"" | "link" | "text">("");
   const [confirming, setConfirming] = useState(false);
-  const [removed, setRemoved] = useState(false);
+  const [removed, setRemoved] = useState<RemoveMode>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesBaseline = useRef(recipe.notes ?? "");
 
   const gone = recipe.video_status === "gone";
   const playable = !gone;
@@ -59,6 +97,7 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
       steps: recipe.steps.map((s) => ({ ...s })),
     });
     setEditing(true);
+    setError(null);
   };
 
   const cancelEdit = () => {
@@ -66,50 +105,136 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
     setEditing(false);
   };
 
-  const saveEdit = () => {
-    if (!draft) return;
-    setRecipe((r) => ({
-      ...r,
-      title: draft.title,
-      ingredients: draft.ingredients.map((i) => ({
-        ...i,
-        inferred: false,
-        // keep order stable; re-number not needed for ingredients
-        name: i.name,
-        qty: i.qty,
-      })),
-      steps: draft.steps.map((s, i) => ({ ...s, n: i + 1 })),
-      verified: true,
+  const saveEdit = async () => {
+    if (!draft || busy) return;
+    setBusy(true);
+    setError(null);
+    const ingredients = draft.ingredients.map((i) => ({
+      ...i,
+      inferred: false,
     }));
+    const steps = draft.steps.map((s, i) => ({ ...s, n: i + 1 }));
+    const result = await apiJson<{ recipe: Recipe }>(
+      `/api/recipes/${recipe.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: draft.title,
+          ingredients,
+          steps,
+        }),
+      },
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setRecipe(result.data.recipe);
     setDraft(null);
     setEditing(false);
   };
 
-  const markVerified = () => {
-    setRecipe((r) => ({ ...r, verified: true }));
+  const markVerified = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await apiJson<{ recipe: Recipe }>(
+      `/api/recipes/${recipe.id}/verify`,
+      { method: "POST" },
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setRecipe(result.data.recipe);
   };
 
-  const openShare = () => {
-    if (!shareSlug) {
-      const hex = Math.random().toString(16).slice(2, 6);
-      setShareSlug(makeShareSlug(recipe.title, hex));
-    }
+  const persistNotes = useCallback(
+    async (value: string) => {
+      if (value === notesBaseline.current) return;
+      setNotesStatus("Saving…");
+      const result = await apiJson<{ recipe: Recipe }>(
+        `/api/recipes/${recipe.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ notes: value || null }),
+        },
+      );
+      if (!result.ok) {
+        setNotesStatus("Couldn’t save notes");
+        return;
+      }
+      notesBaseline.current = value;
+      setRecipe(result.data.recipe);
+      setNotesStatus("Saved to this recipe");
+    },
+    [recipe.id],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (notesTimer.current) clearTimeout(notesTimer.current);
+    };
+  }, []);
+
+  const onNotesChange = (value: string) => {
+    setNotes(value);
+    setNotesStatus("Saving…");
+    if (notesTimer.current) clearTimeout(notesTimer.current);
+    notesTimer.current = setTimeout(() => {
+      void persistNotes(value);
+    }, 600);
+  };
+
+  const openShare = async () => {
     setCopied("");
     setShareOpen(true);
+    setError(null);
+    if (shareSlug) return;
+    setShareBusy(true);
+    const result = await apiJson<{ slug: string }>(
+      `/api/recipes/${recipe.id}/share`,
+      { method: "POST" },
+    );
+    setShareBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      setShareOpen(false);
+      return;
+    }
+    setShareSlug(result.data.slug);
+  };
+
+  const killShare = async () => {
+    if (!shareSlug || shareBusy) return;
+    setShareBusy(true);
+    const result = await apiJson<undefined>(`/api/share/${shareSlug}`, {
+      method: "DELETE",
+    });
+    setShareBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setShareSlug(null);
+    setShareOpen(false);
   };
 
   const shareUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/r/${shareSlug ?? "preview"}`
-      : `roux.cooking/r/${shareSlug ?? "preview"}`;
+      ? `${window.location.origin}/r/${shareSlug ?? "…"}`
+      : `roux.cooking/r/${shareSlug ?? "…"}`;
 
   const copyLink = async () => {
+    if (!shareSlug) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
+      setCopied("link");
     } catch {
-      /* stub */
+      setError("Couldn’t copy link");
     }
-    setCopied("link");
   };
 
   const copyText = async () => {
@@ -126,10 +251,43 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
+      setCopied("text");
     } catch {
-      /* stub */
+      setError("Couldn’t copy text");
     }
-    setCopied("text");
+  };
+
+  const archiveRecipe = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await apiJson<{ recipe: Recipe }>(
+      `/api/recipes/${recipe.id}/archive`,
+      { method: "POST" },
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setConfirming(false);
+    setRemoved("archive");
+  };
+
+  const deletePermanently = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await apiJson<undefined>(`/api/recipes/${recipe.id}`, {
+      method: "DELETE",
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setConfirming(false);
+    setRemoved("delete");
   };
 
   if (removed) {
@@ -144,9 +302,13 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
           gap: 13.2,
         }}
       >
-        <h2 style={{ margin: 0 }}>Recipe removed</h2>
+        <h2 style={{ margin: 0 }}>
+          {removed === "archive" ? "Recipe archived" : "Recipe deleted"}
+        </h2>
         <p className="text-muted" style={{ margin: 0 }}>
-          Local stub — nothing was written to the server.
+          {removed === "archive"
+            ? "It’ll sit in Archive for 30 days. You can restore it from the library."
+            : "Gone for good. A later sync won’t re-add this video."}
         </p>
         <Link href="/" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
           Back to Library
@@ -247,14 +409,16 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
             className="btn btn-secondary"
             onClick={() => (editing ? cancelEdit() : startEdit())}
             style={{ minHeight: 44 }}
+            disabled={busy}
           >
             {editing ? "Cancel edit" : "Edit recipe"}
           </button>
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={openShare}
+            onClick={() => void openShare()}
             style={{ minHeight: 44 }}
+            disabled={busy || shareBusy}
           >
             <ShareIcon />
             Share
@@ -265,11 +429,26 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
             onClick={() => setConfirming(true)}
             title="Remove from library"
             style={{ width: 44, height: 44 }}
+            disabled={busy}
           >
             <TrashIcon />
           </button>
         </div>
       </div>
+
+      {error ? (
+        <div
+          className="card"
+          style={{
+            padding: "13.2px 17.6px",
+            background: "var(--color-accent-100)",
+            color: "var(--color-accent-900)",
+            fontSize: 13.5,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
       {(gone || recipe.video_status === "off_playlist") && (
         <div
@@ -350,19 +529,24 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
                   whiteSpace: "nowrap",
                 }}
               >
-                {shareUrl}
+                {shareBusy || !shareSlug ? "Creating link…" : shareUrl}
               </span>
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={copyLink}
+                onClick={() => void copyLink()}
                 style={{ marginTop: 0, flex: "none" }}
+                disabled={!shareSlug || shareBusy}
               >
                 {copied === "link" ? "Link copied" : "Copy link"}
               </button>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8.8 }}>
-              <button type="button" className="btn btn-secondary" onClick={copyText}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void copyText()}
+              >
                 {copied === "text" ? "Recipe copied" : "Copy as text"}
               </button>
               <button type="button" className="btn btn-secondary" disabled>
@@ -380,10 +564,8 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => {
-                  setShareSlug(null);
-                  setShareOpen(false);
-                }}
+                onClick={() => void killShare()}
+                disabled={!shareSlug || shareBusy}
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: 13,
@@ -424,6 +606,7 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => setConfirming(false)}
+                disabled={busy}
                 style={{ fontFamily: "var(--font-body)", fontSize: 13 }}
               >
                 Keep it
@@ -431,20 +614,16 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => {
-                  setConfirming(false);
-                  setRemoved(true);
-                }}
+                onClick={() => void deletePermanently()}
+                disabled={busy}
               >
                 Delete permanently
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => {
-                  setConfirming(false);
-                  setRemoved(true);
-                }}
+                onClick={() => void archiveRecipe()}
+                disabled={busy}
                 style={{ marginTop: 0 }}
               >
                 Archive
@@ -458,8 +637,9 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
         <EditForm
           draft={draft}
           setDraft={setDraft}
-          onSave={saveEdit}
+          onSave={() => void saveEdit()}
           onCancel={cancelEdit}
+          busy={busy}
         />
       ) : (
         <>
@@ -498,7 +678,8 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={markVerified}
+                onClick={() => void markVerified()}
+                disabled={busy}
                 style={{ marginTop: 0, flex: "none" }}
               >
                 Mark verified
@@ -513,13 +694,8 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
             videoOpen={videoOpen}
             onToggleVideo={() => setVideoOpen((v) => !v)}
             notes={notes}
-            onNotes={(v) => {
-              setNotes(v);
-              setNotesTouched(true);
-            }}
-            notesStatus={
-              notesTouched ? "Saved to this recipe" : "Only you can see these"
-            }
+            onNotes={onNotesChange}
+            notesStatus={notesStatus}
           />
         </>
       )}
@@ -788,11 +964,13 @@ function EditForm({
   setDraft,
   onSave,
   onCancel,
+  busy = false,
 }: {
   draft: Draft;
   setDraft: React.Dispatch<React.SetStateAction<Draft | null>>;
   onSave: () => void;
   onCancel: () => void;
+  busy?: boolean;
 }) {
   const patch = useCallback(
     (fn: (d: Draft) => void) => {
@@ -1003,14 +1181,16 @@ function EditForm({
           type="button"
           className="btn btn-primary"
           onClick={onSave}
+          disabled={busy}
           style={{ minHeight: 44, marginTop: 0 }}
         >
-          Save & mark verified
+          {busy ? "Saving…" : "Save & mark verified"}
         </button>
         <button
           type="button"
           className="btn btn-secondary"
           onClick={onCancel}
+          disabled={busy}
           style={{ minHeight: 44 }}
         >
           Discard changes

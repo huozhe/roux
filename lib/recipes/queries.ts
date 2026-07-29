@@ -17,6 +17,7 @@ import {
   recipeTombstones,
   recipes,
   shareLinks,
+  users,
   type RecipeRow,
 } from "@/lib/db";
 import { makeShareSlug } from "@/lib/format";
@@ -27,7 +28,9 @@ import type {
   SortDir,
   SortKey,
   Step,
+  UserPrefs,
 } from "@/lib/types";
+import { DEFAULT_PREFS } from "@/lib/types";
 import { rowToRecipe } from "./map";
 
 function escapeLike(s: string): string {
@@ -336,4 +339,147 @@ export async function revokeShare(
     .set({ revokedAt: new Date() })
     .where(eq(shareLinks.slug, slug));
   return "ok";
+}
+
+export type ShareLinkListItem = {
+  slug: string;
+  title: string;
+  recipeId: string;
+  createdAt: string;
+};
+
+/** Active (non-revoked) share links for the user's recipes. */
+export async function listShareLinks(
+  userId: string,
+): Promise<ShareLinkListItem[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      slug: shareLinks.slug,
+      title: recipes.title,
+      recipeId: recipes.id,
+      createdAt: shareLinks.createdAt,
+    })
+    .from(shareLinks)
+    .innerJoin(recipes, eq(shareLinks.recipeId, recipes.id))
+    .where(
+      and(
+        eq(recipes.userId, userId),
+        isNull(shareLinks.revokedAt),
+        isNull(recipes.deletedAt),
+      ),
+    )
+    .orderBy(desc(shareLinks.createdAt));
+
+  return rows.map((r) => ({
+    slug: r.slug,
+    title: r.title,
+    recipeId: r.recipeId,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Public share resolve: non-revoked slug → recipe (notes stripped).
+ * Returns null if missing/revoked.
+ */
+export async function getSharedRecipeBySlug(
+  slug: string,
+): Promise<Recipe | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ recipe: recipes })
+    .from(shareLinks)
+    .innerJoin(recipes, eq(shareLinks.recipeId, recipes.id))
+    .where(
+      and(
+        eq(shareLinks.slug, slug),
+        isNull(shareLinks.revokedAt),
+        isNull(recipes.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  const recipe = rowToRecipe(row.recipe);
+  // Public page never exposes personal notes / verify state.
+  return { ...recipe, notes: null, verified: false };
+}
+
+function asUserPrefs(v: unknown): UserPrefs {
+  if (!v || typeof v !== "object") return { ...DEFAULT_PREFS };
+  const o = v as Partial<UserPrefs>;
+  return {
+    layout: o.layout === "split" ? "split" : "single",
+    timestamps: o.timestamps !== false,
+    newShelf: Boolean(o.newShelf),
+    ...(Array.isArray(o.customCuisines)
+      ? { customCuisines: o.customCuisines.filter((s) => typeof s === "string") }
+      : {}),
+    ...(Array.isArray(o.customMains)
+      ? { customMains: o.customMains.filter((s) => typeof s === "string") }
+      : {}),
+  };
+}
+
+export async function getUserPrefs(userId: string): Promise<UserPrefs> {
+  const db = getDb();
+  const rows = await db
+    .select({ prefs: users.prefs })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return asUserPrefs(rows[0]?.prefs);
+}
+
+export async function updateUserPrefs(
+  userId: string,
+  patch: Partial<UserPrefs>,
+): Promise<UserPrefs> {
+  const current = await getUserPrefs(userId);
+  const next: UserPrefs = {
+    layout: patch.layout ?? current.layout,
+    timestamps:
+      patch.timestamps !== undefined ? patch.timestamps : current.timestamps,
+    newShelf: patch.newShelf !== undefined ? patch.newShelf : current.newShelf,
+  };
+  if (patch.customCuisines !== undefined) {
+    next.customCuisines = patch.customCuisines;
+  } else if (current.customCuisines) {
+    next.customCuisines = current.customCuisines;
+  }
+  if (patch.customMains !== undefined) {
+    next.customMains = patch.customMains;
+  } else if (current.customMains) {
+    next.customMains = current.customMains;
+  }
+
+  const db = getDb();
+  await db
+    .update(users)
+    .set({ prefs: next })
+    .where(eq(users.id, userId));
+  return next;
+}
+
+/** Active share slug for a recipe the user owns, if any. */
+export async function getActiveShareSlug(
+  userId: string,
+  recipeId: string,
+): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ slug: shareLinks.slug })
+    .from(shareLinks)
+    .innerJoin(recipes, eq(shareLinks.recipeId, recipes.id))
+    .where(
+      and(
+        eq(shareLinks.recipeId, recipeId),
+        eq(recipes.userId, userId),
+        isNull(shareLinks.revokedAt),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.slug ?? null;
 }
