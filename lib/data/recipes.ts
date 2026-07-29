@@ -16,8 +16,9 @@ async function resolveUserId(opts?: ListRecipesOpts): Promise<string | null> {
   if (opts?.userId) return opts.userId;
   try {
     const { auth } = await import("@/lib/auth");
+    const { resolveAppUserId } = await import("@/lib/recipes/auth");
     const session = await auth();
-    return session?.user?.id ?? null;
+    return resolveAppUserId(session?.user?.id);
   } catch {
     return null;
   }

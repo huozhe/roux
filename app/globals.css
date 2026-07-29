@@ -4,6 +4,17 @@ body {
   height: 100%;
 }
 
+/* Recipe "ingredients pinned" layout: stack on narrow viewports. */
+@media (max-width: 720px) {
+  .recipe-split-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .recipe-split-layout > .card.elev-sm {
+    position: static !important;
+  }
+}
+
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

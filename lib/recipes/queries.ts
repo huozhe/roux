@@ -456,10 +456,14 @@ export async function updateUserPrefs(
   }
 
   const db = getDb();
-  await db
+  const updated = await db
     .update(users)
     .set({ prefs: next })
-    .where(eq(users.id, userId));
+    .where(eq(users.id, userId))
+    .returning({ id: users.id });
+  if (!updated[0]) {
+    throw new Error("User not found for prefs update");
+  }
   return next;
 }
 

@@ -13,7 +13,9 @@ import {
   youtubeStepUrl,
   youtubeWatchUrl,
 } from "@/lib/format";
-import type { Ingredient, Recipe, Step } from "@/lib/types";
+import { useLivePrefs } from "@/lib/prefs/client";
+import type { Ingredient, Recipe, Step, UserPrefs } from "@/lib/types";
+import { DEFAULT_PREFS } from "@/lib/types";
 
 type Draft = {
   title: string;
@@ -55,8 +57,17 @@ async function apiJson<T>(
   }
 }
 
-export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
+export function RecipeDetail({
+  recipe: initial,
+  prefs = DEFAULT_PREFS,
+}: {
+  recipe: Recipe;
+  prefs?: UserPrefs;
+}) {
   const [recipe, setRecipe] = useState(initial);
+  const livePrefs = useLivePrefs(prefs);
+  const showTimestamps = livePrefs.timestamps !== false;
+  const layout = livePrefs.layout === "split" ? "split" : "single";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [notes, setNotes] = useState(recipe.notes ?? "");
@@ -687,19 +698,65 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
             </div>
           )}
 
-          <SingleScroll
-            recipe={recipe}
-            playable={playable}
-            gone={gone}
-            videoOpen={videoOpen}
-            onToggleVideo={() => setVideoOpen((v) => !v)}
-            notes={notes}
-            onNotes={onNotesChange}
-            notesStatus={notesStatus}
-          />
+          {layout === "split" ? (
+            <SplitLayout
+              recipe={recipe}
+              playable={playable}
+              gone={gone}
+              videoOpen={videoOpen}
+              onToggleVideo={() => setVideoOpen((v) => !v)}
+              notes={notes}
+              onNotes={onNotesChange}
+              notesStatus={notesStatus}
+              showTimestamps={showTimestamps}
+            />
+          ) : (
+            <SingleScroll
+              recipe={recipe}
+              playable={playable}
+              gone={gone}
+              videoOpen={videoOpen}
+              onToggleVideo={() => setVideoOpen((v) => !v)}
+              notes={notes}
+              onNotes={onNotesChange}
+              notesStatus={notesStatus}
+              showTimestamps={showTimestamps}
+            />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+function StepTimestamp({
+  recipe,
+  gone,
+  tSeconds,
+  showTimestamps,
+}: {
+  recipe: Recipe;
+  gone: boolean;
+  tSeconds: number;
+  showTimestamps: boolean;
+}) {
+  if (gone) {
+    return (
+      <span className="text-muted" style={{ fontSize: 12.5 }}>
+        Was at {formatTimestamp(tSeconds)} — video unavailable
+      </span>
+    );
+  }
+  if (!showTimestamps) return null;
+  return (
+    <a
+      href={youtubeStepUrl(recipe.video_id, tSeconds)}
+      target="_blank"
+      rel="noreferrer"
+      style={{ fontSize: 12.5 }}
+    >
+      Video at {formatTimestamp(tSeconds)}
+    </a>
   );
 }
 
@@ -712,6 +769,7 @@ function SingleScroll({
   notes,
   onNotes,
   notesStatus,
+  showTimestamps,
 }: {
   recipe: Recipe;
   playable: boolean;
@@ -721,6 +779,7 @@ function SingleScroll({
   notes: string;
   onNotes: (v: string) => void;
   notesStatus: string;
+  showTimestamps: boolean;
 }) {
   return (
     <div
@@ -911,49 +970,263 @@ function SingleScroll({
               >
                 {s.text}
               </div>
-              {gone ? (
-                <span className="text-muted" style={{ fontSize: 12.5 }}>
-                  Was at {formatTimestamp(s.t_seconds)} — video unavailable
-                </span>
-              ) : (
-                <a
-                  href={youtubeStepUrl(recipe.video_id, s.t_seconds)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: 12.5 }}
-                >
-                  Video at {formatTimestamp(s.t_seconds)}
-                </a>
-              )}
+              <StepTimestamp
+                recipe={recipe}
+                gone={gone}
+                tSeconds={s.t_seconds}
+                showTimestamps={showTimestamps}
+              />
             </div>
           </div>
         ))}
       </div>
 
+      <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+    </div>
+  );
+}
+
+function SplitLayout({
+  recipe,
+  playable,
+  gone,
+  videoOpen,
+  onToggleVideo,
+  notes,
+  onNotes,
+  notesStatus,
+  showTimestamps,
+}: {
+  recipe: Recipe;
+  playable: boolean;
+  gone: boolean;
+  videoOpen: boolean;
+  onToggleVideo: () => void;
+  notes: string;
+  onNotes: (v: string) => void;
+  notesStatus: string;
+  showTimestamps: boolean;
+}) {
+  return (
+    <div
+      className="recipe-split-layout"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(260px, 340px) minmax(0, 1fr)",
+        gap: 26.4,
+        alignItems: "start",
+      }}
+    >
       <div
-        className="card"
+        className="card elev-sm"
         style={{
-          gap: 8.8,
+          gap: 13.2,
           padding: 22,
-          background: "var(--color-accent-2-100)",
+          position: "sticky",
+          top: 90,
         }}
       >
-        <h4 style={{ margin: 0 }}>My notes</h4>
-        <textarea
-          className="input"
-          placeholder="Substitutions, what went wrong, what to do differently…"
-          value={notes}
-          onChange={(e) => onNotes(e.target.value)}
-          style={{
-            background: "var(--color-bg)",
-            borderRadius: 20,
-            fontSize: 15,
-            minHeight: 96,
-          }}
-        />
-        <div className="text-muted" style={{ fontSize: 12 }}>
-          {notesStatus}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <h4 style={{ margin: 0 }}>Ingredients</h4>
+          <span className="text-muted" style={{ fontSize: 12.5 }}>
+            {recipe.ingredients.length}
+          </span>
         </div>
+        <IngredientsList ingredients={recipe.ingredients} />
+
+        {playable && (
+          <button
+            type="button"
+            onClick={onToggleVideo}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              width: "100%",
+              marginTop: 4,
+              padding: "8px 13.2px 8px 8px",
+              border: "1px solid var(--color-divider)",
+              borderRadius: 999,
+              background: "var(--color-bg)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              textAlign: "left",
+            }}
+          >
+            <span
+              style={{
+                width: 30,
+                height: 30,
+                flex: "none",
+                borderRadius: 999,
+                background: "var(--color-accent)",
+                color: "var(--color-bg)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <PlayIcon size={15} />
+            </span>
+            <span
+              style={{
+                flex: 1,
+                fontFamily: "var(--font-heading)",
+                fontSize: 14,
+              }}
+            >
+              {videoOpen ? "Hide video" : "Watch the video"}
+            </span>
+            <span
+              style={{
+                flex: "none",
+                display: "grid",
+                transform: videoOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.18s ease",
+              }}
+            >
+              <ChevronDown />
+            </span>
+          </button>
+        )}
+
+        {playable && videoOpen && (
+          <div
+            style={{
+              position: "relative",
+              aspectRatio: "16 / 9",
+              borderRadius: 20,
+              background: "var(--color-neutral-300)",
+              overflow: "hidden",
+            }}
+          >
+            <iframe
+              title={recipe.video_title}
+              src={youtubeEmbedUrl(recipe.video_id)}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                border: 0,
+              }}
+            />
+          </div>
+        )}
+
+        {gone && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: 4,
+              padding: "10px 13.2px",
+              borderRadius: 20,
+              background: "var(--color-neutral-200)",
+              border: "1px dashed var(--color-neutral-400)",
+              color: "var(--color-neutral-700)",
+            }}
+          >
+            <span style={{ flex: "none", display: "grid" }}>
+              <VideoOffIcon size={18} />
+            </span>
+            <span style={{ fontSize: 12.5 }}>Video no longer available</span>
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 17.6,
+          minWidth: 0,
+        }}
+      >
+        <h4 style={{ margin: 0 }}>Steps</h4>
+        {recipe.steps.map((s) => (
+          <div
+            key={s.n}
+            className="card"
+            style={{
+              flexDirection: "row",
+              gap: 13.2,
+              alignItems: "flex-start",
+              padding: 17.6,
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                flex: "none",
+                borderRadius: 999,
+                background: "var(--color-accent-200)",
+                color: "var(--color-accent-900)",
+                display: "grid",
+                placeItems: "center",
+                fontWeight: 700,
+                fontSize: 14,
+              }}
+            >
+              {s.n}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div
+                style={{ fontSize: 16, lineHeight: 1.5, textWrap: "pretty" }}
+              >
+                {s.text}
+              </div>
+              <StepTimestamp
+                recipe={recipe}
+                gone={gone}
+                tSeconds={s.t_seconds}
+                showTimestamps={showTimestamps}
+              />
+            </div>
+          </div>
+        ))}
+        <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+      </div>
+    </div>
+  );
+}
+
+function NotesCard({
+  notes,
+  onNotes,
+  notesStatus,
+}: {
+  notes: string;
+  onNotes: (v: string) => void;
+  notesStatus: string;
+}) {
+  return (
+    <div
+      className="card"
+      style={{
+        gap: 8.8,
+        padding: 22,
+        background: "var(--color-accent-2-100)",
+      }}
+    >
+      <h4 style={{ margin: 0 }}>My notes</h4>
+      <textarea
+        className="input"
+        placeholder="Substitutions, what went wrong, what to do differently…"
+        value={notes}
+        onChange={(e) => onNotes(e.target.value)}
+        style={{
+          background: "var(--color-bg)",
+          borderRadius: 20,
+          fontSize: 15,
+          minHeight: 96,
+        }}
+      />
+      <div className="text-muted" style={{ fontSize: 12 }}>
+        {notesStatus}
       </div>
     </div>
   );

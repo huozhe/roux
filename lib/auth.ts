@@ -55,14 +55,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, account }) {
-      if (account?.providerAccountId) {
-        const db = getDb();
-        const row = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.googleSub, account.providerAccountId))
-          .limit(1);
-        if (row[0]) (token as { uid?: string }).uid = row[0].id;
+      const t = token as { uid?: string; sub?: string };
+      // Prefer account id on sign-in; otherwise rehydrate from existing JWT.
+      const googleSub = account?.providerAccountId ?? t.sub;
+      if (!t.uid && googleSub) {
+        try {
+          const db = getDb();
+          const row = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.googleSub, googleSub))
+            .limit(1);
+          if (row[0]) t.uid = row[0].id;
+        } catch {
+          /* DB unavailable during edge/build — leave uid unset */
+        }
       }
       return token;
     },
@@ -70,7 +77,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         const uid = (token as { uid?: string }).uid;
-        session.user.id = uid ?? token.sub ?? "";
+        // Prefer app UUID; never fall back to raw Google sub for API ownership.
+        session.user.id = uid ?? "";
       }
       return session;
     },

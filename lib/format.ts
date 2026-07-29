@@ -34,6 +34,16 @@ export function formatTimestamp(seconds: number): string {
   return `${m}:${pad(sec)}`;
 }
 
+/** Best thumbnail URL for a recipe card/shelf (stored or YouTube fallback). */
+export function recipeThumbnailUrl(r: {
+  thumbnail_url?: string | null;
+  video_id?: string | null;
+}): string | null {
+  if (r.thumbnail_url) return r.thumbnail_url;
+  if (r.video_id) return `https://i.ytimg.com/vi/${r.video_id}/hqdefault.jpg`;
+  return null;
+}
+
 export function youtubeWatchUrl(videoId: string, tSeconds?: number): string {
   // https watch URLs open the YouTube app on mobile when installed (universal links).
   const base = `https://www.youtube.com/watch?v=${videoId}`;

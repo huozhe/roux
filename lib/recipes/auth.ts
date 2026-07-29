@@ -1,16 +1,42 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { getDb, users } from "@/lib/db";
 
-/** Session user id or 401 response. */
-export async function requireUserId(): Promise<
-  string | NextResponse
-> {
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Map session.user.id → roux.users.id.
+ * Older JWTs may carry Google `sub` instead of the app UUID.
+ */
+export async function resolveAppUserId(
+  sessionUserId: string | null | undefined,
+): Promise<string | null> {
+  if (!sessionUserId) return null;
+  if (UUID_RE.test(sessionUserId)) return sessionUserId;
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.googleSub, sessionUserId))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Session app user id or 401 response. */
+export async function requireUserId(): Promise<string | NextResponse> {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
-  if (!userId) {
+  const resolved = await resolveAppUserId(session?.user?.id);
+  if (!resolved) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return userId;
+  return resolved;
 }
 
 export function isUnauthorized(

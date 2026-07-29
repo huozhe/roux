@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { DEFAULT_PREFS } from "@/lib/types";
 import type { RecipeLayout, UserPrefs } from "@/lib/types";
@@ -14,6 +15,7 @@ export function PrefsForm({
   initial = DEFAULT_PREFS,
   onChange,
 }: PrefsFormProps) {
+  const router = useRouter();
   const [prefs, setPrefs] = useState<UserPrefs>(initial);
   const [status, setStatus] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +50,8 @@ export function PrefsForm({
         return;
       }
       setStatus("Saved");
+      // Refresh RSC cache so library/recipe pages pick up new prefs.
+      router.refresh();
     } catch {
       setStatus("Couldn’t save");
     }

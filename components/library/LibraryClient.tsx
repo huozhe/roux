@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { CUISINES, MAINS } from "@/lib/categories";
-import { relativeAgo } from "@/lib/format";
+import { recipeThumbnailUrl, relativeAgo } from "@/lib/format";
+import { useLivePrefs } from "@/lib/prefs/client";
 import { filterAndSortRecipes } from "@/lib/search";
 import type {
   LibraryView,
@@ -40,7 +41,8 @@ export function LibraryClient({
   const [view, setView] = useState<LibraryView>("library");
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const showNewShelf = prefs.newShelf;
+  const livePrefs = useLivePrefs(prefs);
+  const showNewShelf = Boolean(livePrefs.newShelf);
 
   const archiveCount = useMemo(
     () => recipes.filter((r) => r.archived_at != null).length,
@@ -231,7 +233,9 @@ export function LibraryClient({
               paddingBottom: 6,
             }}
           >
-            {newShelfRecipes.map((r) => (
+            {newShelfRecipes.map((r) => {
+              const thumb = recipeThumbnailUrl(r);
+              return (
               <a
                 key={r.id}
                 href={`/recipes/${r.id}`}
@@ -258,17 +262,31 @@ export function LibraryClient({
                     display: "grid",
                     placeItems: "center",
                     color: "var(--color-neutral-100)",
+                    overflow: "hidden",
                   }}
                 >
-                  <svg
-                    width={24}
-                    height={24}
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden
-                  >
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumb}
+                      alt=""
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <svg
+                      width={24}
+                      height={24}
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
                 </div>
                 <div
                   style={{
@@ -305,7 +323,8 @@ export function LibraryClient({
                   </div>
                 </div>
               </a>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}

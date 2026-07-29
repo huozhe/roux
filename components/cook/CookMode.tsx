@@ -8,7 +8,9 @@ import {
   formatTimestamp,
   youtubeStepUrl,
 } from "@/lib/format";
-import type { Ingredient, Recipe } from "@/lib/types";
+import { useLivePrefs } from "@/lib/prefs/client";
+import type { Ingredient, Recipe, UserPrefs } from "@/lib/types";
+import { DEFAULT_PREFS } from "@/lib/types";
 
 /** Match ingredients whose base name (or last significant word) appears in step text. */
 export function ingredientsInStep(
@@ -38,8 +40,22 @@ export function ingredientsInStep(
   return [];
 }
 
-export function CookMode({ recipe }: { recipe: Recipe }) {
+export function CookMode({
+  recipe,
+  prefs = DEFAULT_PREFS,
+  showTimestamps: showTimestampsProp,
+}: {
+  recipe: Recipe;
+  prefs?: UserPrefs;
+  /** @deprecated prefer prefs.timestamps */
+  showTimestamps?: boolean;
+}) {
   const router = useRouter();
+  const livePrefs = useLivePrefs(prefs);
+  const showTimestamps =
+    showTimestampsProp !== undefined
+      ? showTimestampsProp
+      : livePrefs.timestamps !== false;
   const steps = recipe.steps;
   const [index, setIndex] = useState(0);
   const [awake, setAwake] = useState(true);
@@ -209,7 +225,7 @@ export function CookMode({ recipe }: { recipe: Recipe }) {
           <div className="tag tag-accent" style={{ fontSize: 12 }}>
             Step {index + 1} of {steps.length}
           </div>
-          {!gone && (
+          {showTimestamps && !gone && (
             <a
               href={youtubeStepUrl(recipe.video_id, step.t_seconds)}
               target="_blank"

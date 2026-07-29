@@ -7,11 +7,14 @@ import { PrefsForm } from "@/components/settings/PrefsForm";
 import { ShareLinksList } from "@/components/settings/ShareLinksList";
 import { auth } from "@/lib/auth";
 import { CUISINES, MAINS } from "@/lib/categories";
+import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   getUserPrefs,
   listShareLinks,
 } from "@/lib/recipes/queries";
 import { DEFAULT_PREFS } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Settings · Roux",
@@ -32,7 +35,7 @@ async function publicOrigin(): Promise<string> {
 
 export default async function SettingsPage() {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
   const hasDb = Boolean(process.env.DATABASE_URL && userId);
   const origin = await publicOrigin();
 

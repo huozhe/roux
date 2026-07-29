@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { formatCookMinutes, fullDate, relativeAgo } from "@/lib/format";
+import {
+  formatCookMinutes,
+  fullDate,
+  recipeThumbnailUrl,
+  relativeAgo,
+} from "@/lib/format";
 import type { Recipe, SortKey } from "@/lib/types";
 
 const STATUS_TEXT: Record<"gone" | "off_playlist", string> = {
@@ -26,6 +31,7 @@ export function RecipeCard({ recipe: r, sort }: Props) {
   const statusNote = status ? STATUS_TEXT[status] : "";
   const statusCls =
     status === "gone" ? "tag tag-outline" : "tag tag-neutral";
+  const thumb = recipeThumbnailUrl(r);
 
   return (
     <Link
@@ -52,10 +58,10 @@ export function RecipeCard({ recipe: r, sort }: Props) {
           overflow: "hidden",
         }}
       >
-        {r.thumbnail_url ? (
+        {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={r.thumbnail_url}
+            src={thumb}
             alt=""
             style={{
               width: "100%",
