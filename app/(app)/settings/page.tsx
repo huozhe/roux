@@ -6,7 +6,7 @@ import { PlaylistPicker } from "@/components/settings/PlaylistPicker";
 import { PrefsForm } from "@/components/settings/PrefsForm";
 import { ShareLinksList } from "@/components/settings/ShareLinksList";
 import { auth } from "@/lib/auth";
-import { CUISINES, MAINS } from "@/lib/categories";
+import { categoryOptions, CUISINES, MAINS } from "@/lib/categories";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   getUserPrefs,
@@ -56,18 +56,8 @@ export default async function SettingsPage() {
     }
   }
 
-  const cuisineOptions = [
-    ...CUISINES,
-    ...(prefs.customCuisines ?? []).filter(
-      (c) => !(CUISINES as readonly string[]).includes(c),
-    ),
-  ];
-  const mainOptions = [
-    ...MAINS,
-    ...(prefs.customMains ?? []).filter(
-      (m) => !(MAINS as readonly string[]).includes(m),
-    ),
-  ];
+  const cuisineOptions = categoryOptions(CUISINES, prefs.customCuisines);
+  const mainOptions = categoryOptions(MAINS, prefs.customMains);
 
   return (
     <div

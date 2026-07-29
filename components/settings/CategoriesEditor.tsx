@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CUISINES, MAINS } from "@/lib/categories";
 
@@ -12,6 +13,7 @@ export function CategoriesEditor({
   initialCuisines = [...CUISINES],
   initialMains = [...MAINS],
 }: CategoriesEditorProps) {
+  const router = useRouter();
   const [cuisines, setCuisines] = useState(initialCuisines);
   const [mains, setMains] = useState(initialMains);
   const [status, setStatus] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export function CategoriesEditor({
         return;
       }
       setStatus("Saved");
+      router.refresh();
     } catch {
       setStatus("Couldn’t save");
     }

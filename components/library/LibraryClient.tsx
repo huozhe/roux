@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDown } from "lucide-react";
-import { CUISINES, MAINS } from "@/lib/categories";
+import { categoryOptions, CUISINES, MAINS } from "@/lib/categories";
 import { recipeThumbnailUrl, relativeAgo } from "@/lib/format";
 import { useLivePrefs } from "@/lib/prefs/client";
 import { filterAndSortRecipes } from "@/lib/search";
@@ -43,6 +43,14 @@ export function LibraryClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const livePrefs = useLivePrefs(prefs);
   const showNewShelf = Boolean(livePrefs.newShelf);
+  const cuisineOptions = useMemo(
+    () => categoryOptions(CUISINES, livePrefs.customCuisines),
+    [livePrefs.customCuisines],
+  );
+  const mainOptions = useMemo(
+    () => categoryOptions(MAINS, livePrefs.customMains),
+    [livePrefs.customMains],
+  );
 
   const archiveCount = useMemo(
     () => recipes.filter((r) => r.archived_at != null).length,
@@ -376,13 +384,13 @@ export function LibraryClient({
           <div style={{ display: "flex", flexDirection: "column", gap: 8.8 }}>
             <ChipRow
               label="Cuisine"
-              options={CUISINES}
+              options={cuisineOptions}
               selected={cuisine}
               onToggle={(v) => toggleChip("cuisine", v)}
             />
             <ChipRow
               label="Main"
-              options={MAINS}
+              options={mainOptions}
               selected={main}
               onToggle={(v) => toggleChip("main", v)}
             />
