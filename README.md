@@ -32,6 +32,22 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 
 ## Status
 
-- **M0** Bootstrap + Organic + login shell
-- **M1** Shared types, fixtures, format/search helpers, fixture data adapter
-- Next: parallel tracks T1 auth/db, T3 extract, T6–T8 UI
+| Merge | Done |
+| --- | --- |
+| M0–M1 | Scaffold, Organic, login, types/fixtures/helpers |
+| Wave 2 | T1 auth+Drizzle · T3 Claude extract · T6 library · T7 recipe/cook · T8 share/export/settings |
+| Next | T4 YouTube playlists · T5 sync/cron · wire fixtures → live API (M3–M4) |
+
+### Try locally
+
+```bash
+npm run dev
+```
+
+Without Google env, auth gate is open so fixtures work:
+
+- `/` library · `/recipes/r1` · `/recipes/r1/cook` · `/settings` · `/r/mapo-tofu-a7f3` · `/login`
+
+### Auth + DB (when ready)
+
+Copy `.env.example` → `.env.local`, set Google OAuth + Neon + `TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32`), then `npm run db:push` and apply `lib/db/migrations/0001_search.sql`.
