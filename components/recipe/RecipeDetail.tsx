@@ -69,7 +69,7 @@ export function RecipeDetail({ recipe: initial }: { recipe: Recipe }) {
     setRecipe((r) => ({
       ...r,
       title: draft.title,
-      ingredients: draft.ingredients.map((i, idx) => ({
+      ingredients: draft.ingredients.map((i) => ({
         ...i,
         inferred: false,
         // keep order stable; re-number not needed for ingredients

@@ -49,7 +49,7 @@ export function filterAndSortRecipes(
     params.dir ??
     (sort === "time" ? "asc" : "desc");
 
-  let list = recipes.filter((r) => {
+  const list = recipes.filter((r) => {
     const archived = r.archived_at != null;
     if (view === "archive") {
       if (!archived) return false;

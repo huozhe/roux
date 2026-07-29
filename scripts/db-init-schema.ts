@@ -34,14 +34,14 @@ function loadEnvLocal() {
 
 loadEnvLocal();
 
-const url = process.env.DATABASE_URL;
-if (!url) {
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
   console.error("DATABASE_URL is not set");
   process.exit(1);
 }
 
 async function main() {
-  const sql = neon(url);
+  const sql = neon(databaseUrl);
   await sql`CREATE SCHEMA IF NOT EXISTS roux`;
   console.log("OK: schema roux exists");
 }

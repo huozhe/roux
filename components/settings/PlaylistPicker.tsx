@@ -25,8 +25,8 @@ export function PlaylistPicker() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     setWarning(null);
     try {
@@ -48,8 +48,10 @@ export function PlaylistPicker() {
     }
   }, []);
 
+  // Fetch on mount (and when load identity changes). Rule flags any setState path from effects.
   useEffect(() => {
-    void load();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional client fetch on mount
+    void load({ silent: true });
   }, [load]);
 
   async function persist(next: Playlist[]) {
