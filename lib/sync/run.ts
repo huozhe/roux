@@ -448,26 +448,33 @@ export async function runSyncForUser(
       }
     }
 
-    // Status reconcile: off_playlist + gone
-    onProgress({
-      stage: "Checking video status…",
-      found,
-      written,
-      skipped,
-    });
-
+    // Local membership reconcile (DB only — cheap).
+    // YouTube videos.list for "gone" is expensive (~all library IDs); only run when
+    // this pass actually tried extract work, or when FORCE_STATUS_CHECK=1.
     const activeLibrary = await db
       .select({
         id: recipes.id,
         videoId: recipes.videoId,
         videoStatus: recipes.videoStatus,
+        channelTitle: recipes.channelTitle,
+        channelId: recipes.channelId,
       })
       .from(recipes)
       .where(
-        and(eq(recipes.userId, userId), isNull(recipes.archivedAt)),
+        and(
+          eq(recipes.userId, userId),
+          isNull(recipes.archivedAt),
+          isNull(recipes.deletedAt),
+        ),
       );
 
-    // off_playlist: not in any selected playlist this run
+    onProgress({
+      stage: "Updating playlist membership…",
+      found,
+      written,
+      skipped,
+    });
+
     for (const row of activeLibrary) {
       if (!inPlaylist.has(row.videoId) && row.videoStatus !== "gone") {
         if (row.videoStatus !== "off_playlist") {
@@ -487,29 +494,49 @@ export async function runSyncForUser(
       }
     }
 
-    // gone + backfill uploader channel from videos.list snippet
-    const statusIds = activeLibrary.map((r) => r.videoId);
-    if (statusIds.length > 0) {
-      const statuses = await getVideosMeta(accessToken, statusIds);
-      for (const row of activeLibrary) {
-        const st = statuses.get(row.videoId);
-        if (!st) continue;
-        if (!st.exists && row.videoStatus !== "gone") {
-          await db
-            .update(recipes)
-            .set({ videoStatus: "gone" })
-            .where(eq(recipes.id, row.id));
-          continue;
-        }
-        // Credit the video uploader (not playlist owner)
-        if (st.exists && st.channelTitle) {
-          await db
-            .update(recipes)
-            .set({
-              channelTitle: st.channelTitle,
-              ...(st.channelId ? { channelId: st.channelId } : {}),
-            })
-            .where(eq(recipes.id, row.id));
+    const forceStatus =
+      process.env.FORCE_STATUS_CHECK === "1" ||
+      process.env.FORCE_STATUS_CHECK === "true";
+    const didExtractWork = written > 0 || processedNew > 0;
+
+    if (didExtractWork || forceStatus) {
+      onProgress({
+        stage: "Checking video status…",
+        found,
+        written,
+        skipped,
+      });
+      // Only probe videos not already marked gone (saves API quota + time).
+      const toCheck = activeLibrary.filter((r) => r.videoStatus !== "gone");
+      if (toCheck.length > 0) {
+        const statuses = await getVideosMeta(
+          accessToken,
+          toCheck.map((r) => r.videoId),
+        );
+        for (const row of toCheck) {
+          const st = statuses.get(row.videoId);
+          if (!st) continue;
+          if (!st.exists) {
+            await db
+              .update(recipes)
+              .set({ videoStatus: "gone" })
+              .where(eq(recipes.id, row.id));
+            continue;
+          }
+          // Credit uploader only when missing or changed
+          if (
+            st.channelTitle &&
+            (st.channelTitle !== row.channelTitle ||
+              (st.channelId && st.channelId !== row.channelId))
+          ) {
+            await db
+              .update(recipes)
+              .set({
+                channelTitle: st.channelTitle,
+                ...(st.channelId ? { channelId: st.channelId } : {}),
+              })
+              .where(eq(recipes.id, row.id));
+          }
         }
       }
     }
