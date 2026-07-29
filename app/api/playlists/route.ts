@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   applySelection,
   fixturePlaylists,
@@ -17,12 +18,15 @@ function authReady() {
 }
 
 /**
- * GET /api/playlists — YouTube list merged with selected flags.
- * Without session/DB: fixture playlists (UI dev).
+ * GET /api/playlists — stored playlists (default).
+ * GET /api/playlists?refresh=1 — pull full catalog from YouTube + merge selection.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
+  const refresh =
+    new URL(req.url).searchParams.get("refresh") === "1" ||
+    new URL(req.url).searchParams.get("refresh") === "true";
 
   if (!userId || !hasDb() || !authReady()) {
     return NextResponse.json({
@@ -32,24 +36,34 @@ export async function GET() {
   }
 
   try {
-    const playlists = await refreshUserPlaylists(userId);
+    if (refresh) {
+      const playlists = await refreshUserPlaylists(userId);
+      return NextResponse.json({
+        playlists,
+        source: "youtube" as const,
+      });
+    }
+
+    const playlists = await listStoredPlaylists(userId);
     return NextResponse.json({
       playlists,
-      source: "youtube" as const,
+      source: "db" as const,
     });
   } catch (err) {
-    // Fall back to last stored rows if YouTube is down / token missing.
-    try {
-      const stored = await listStoredPlaylists(userId);
-      if (stored.length > 0) {
-        return NextResponse.json({
-          playlists: stored,
-          source: "db" as const,
-          warning: err instanceof Error ? err.message : "YouTube refresh failed",
-        });
+    if (refresh) {
+      try {
+        const stored = await listStoredPlaylists(userId);
+        if (stored.length > 0) {
+          return NextResponse.json({
+            playlists: stored,
+            source: "db" as const,
+            warning:
+              err instanceof Error ? err.message : "YouTube refresh failed",
+          });
+        }
+      } catch {
+        /* ignore secondary failure */
       }
-    } catch {
-      /* ignore secondary failure */
     }
     return NextResponse.json(
       {
@@ -84,7 +98,7 @@ export async function PUT(req: Request) {
   }
 
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
 
   if (!userId || !hasDb() || !authReady()) {
     const playlists = applySelection(fixturePlaylists(), selected as string[]);
@@ -95,20 +109,18 @@ export async function PUT(req: Request) {
   }
 
   try {
-    // Ensure we have current YouTube catalog before applying selection.
-    await refreshUserPlaylists(userId);
     const playlists = await setSelectedPlaylists(userId, selected as string[]);
     return NextResponse.json({
       playlists,
-      source: "youtube" as const,
+      source: "db" as const,
     });
   } catch (err) {
     return NextResponse.json(
       {
         error:
-          err instanceof Error ? err.message : "Failed to update playlists",
+          err instanceof Error ? err.message : "Failed to save playlist selection",
       },
-      { status: 502 },
+      { status: 500 },
     );
   }
 }

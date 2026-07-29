@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import type { Playlist } from "@/lib/types";
 
@@ -24,31 +24,39 @@ export function PlaylistPicker() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  /** Full catalog visible only after user clicks Refresh list. */
+  const [showAll, setShowAll] = useState(false);
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const load = useCallback(async (opts?: { refresh?: boolean; silent?: boolean }) => {
+    const refresh = Boolean(opts?.refresh);
     if (!opts?.silent) setLoading(true);
     setError(null);
     setWarning(null);
     try {
-      const res = await fetch("/api/playlists");
+      const url = refresh ? "/api/playlists?refresh=1" : "/api/playlists";
+      const res = await fetch(url, { cache: "no-store" });
       const data = (await res.json()) as ApiResponse;
       if (!res.ok) {
         setError(data.error ?? `Failed (${res.status})`);
-        setList([]);
+        if (refresh) {
+          /* keep previous list on failed refresh */
+        } else {
+          setList([]);
+        }
         return;
       }
       setList(data.playlists ?? []);
       setSource(data.source ?? "");
       if (data.warning) setWarning(data.warning);
+      if (refresh) setShowAll(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Network error");
-      setList([]);
+      if (!opts?.refresh) setList([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Fetch on mount (and when load identity changes). Rule flags any setState path from effects.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional client fetch on mount
     void load({ silent: true });
@@ -69,6 +77,7 @@ export function PlaylistPicker() {
         setError(data.error ?? `Save failed (${res.status})`);
         return;
       }
+      // PUT returns full stored catalog; keep it so unselected rows remain available when showAll.
       setList(data.playlists ?? next);
       setSource(data.source ?? source);
     } catch (e) {
@@ -87,10 +96,18 @@ export function PlaylistPicker() {
   }
 
   const selectedCount = list.filter((p) => p.selected).length;
-  const countLabel =
-    list.length === 0
+  const visible = useMemo(
+    () => (showAll ? list : list.filter((p) => p.selected)),
+    [list, showAll],
+  );
+
+  const countLabel = showAll
+    ? list.length === 0
       ? "none loaded"
-      : `${selectedCount} of ${list.length} selected`;
+      : `${selectedCount} of ${list.length} selected`
+    : selectedCount === 0
+      ? "none selected"
+      : `${selectedCount} selected`;
 
   return (
     <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
@@ -113,10 +130,10 @@ export function PlaylistPicker() {
           type="button"
           className="btn btn-ghost"
           style={{ fontFamily: "var(--font-body)", fontSize: 13 }}
-          onClick={() => void load()}
+          onClick={() => void load({ refresh: true })}
           disabled={loading || saving}
         >
-          {loading ? "Refreshing…" : "Refresh list"}
+          {loading && showAll ? "Refreshing…" : loading ? "Loading…" : "Refresh list"}
         </button>
       </div>
 
@@ -142,13 +159,15 @@ export function PlaylistPicker() {
         <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
           Loading playlists…
         </p>
-      ) : list.length === 0 ? (
+      ) : visible.length === 0 ? (
         <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-          No playlists found on this Google account.
+          {showAll
+            ? "No playlists found on this Google account."
+            : "No source playlists selected. Refresh list to choose which YouTube playlists Roux watches."}
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {list.map((p) => (
+          {visible.map((p) => (
             <label
               key={p.id}
               className="radio"
@@ -215,9 +234,9 @@ export function PlaylistPicker() {
       )}
 
       <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
-        Pick as many as you like — everything lands in one library, and each
-        recipe remembers which playlist it came from. New videos are written up
-        automatically; Roux decides how often to check.
+        {showAll
+          ? "Pick as many as you like — everything lands in one library. Refresh pulls the latest titles from YouTube."
+          : "Only selected sources are listed. Refresh list to add or change which YouTube playlists feed your library."}
       </p>
     </div>
   );
