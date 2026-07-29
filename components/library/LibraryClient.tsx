@@ -48,20 +48,22 @@ export function LibraryClient({
     const fromRecipes = recipes
       .map((r) => r.cuisine)
       .filter((v): v is string => Boolean(v?.trim()));
-    return categoryOptions(CUISINES, [
-      ...(livePrefs.customCuisines ?? []),
-      ...fromRecipes,
-    ]);
-  }, [livePrefs.customCuisines, recipes]);
+    return categoryOptions(
+      CUISINES,
+      [...(livePrefs.customCuisines ?? []), ...fromRecipes],
+      livePrefs.hiddenCuisines,
+    );
+  }, [livePrefs.customCuisines, livePrefs.hiddenCuisines, recipes]);
   const mainOptions = useMemo(() => {
     const fromRecipes = recipes
       .map((r) => r.main_ingredient)
       .filter((v): v is string => Boolean(v?.trim()));
-    return categoryOptions(MAINS, [
-      ...(livePrefs.customMains ?? []),
-      ...fromRecipes,
-    ]);
-  }, [livePrefs.customMains, recipes]);
+    return categoryOptions(
+      MAINS,
+      [...(livePrefs.customMains ?? []), ...fromRecipes],
+      livePrefs.hiddenMains,
+    );
+  }, [livePrefs.customMains, livePrefs.hiddenMains, recipes]);
 
   const archiveCount = useMemo(
     () => recipes.filter((r) => r.archived_at != null).length,

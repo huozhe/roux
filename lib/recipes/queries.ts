@@ -521,6 +521,12 @@ function asUserPrefs(v: unknown): UserPrefs {
     ...(Array.isArray(o.customMains)
       ? { customMains: o.customMains.filter((s) => typeof s === "string") }
       : {}),
+    ...(Array.isArray(o.hiddenCuisines)
+      ? { hiddenCuisines: o.hiddenCuisines.filter((s) => typeof s === "string") }
+      : {}),
+    ...(Array.isArray(o.hiddenMains)
+      ? { hiddenMains: o.hiddenMains.filter((s) => typeof s === "string") }
+      : {}),
   };
 }
 
@@ -558,6 +564,16 @@ export async function updateUserPrefs(
     next.customMains = patch.customMains;
   } else if (current.customMains) {
     next.customMains = current.customMains;
+  }
+  if (patch.hiddenCuisines !== undefined) {
+    next.hiddenCuisines = patch.hiddenCuisines;
+  } else if (current.hiddenCuisines) {
+    next.hiddenCuisines = current.hiddenCuisines;
+  }
+  if (patch.hiddenMains !== undefined) {
+    next.hiddenMains = patch.hiddenMains;
+  } else if (current.hiddenMains) {
+    next.hiddenMains = current.hiddenMains;
   }
 
   const db = getDb();

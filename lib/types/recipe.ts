@@ -55,6 +55,9 @@ export type UserPrefs = {
   syncMarkVerified: boolean;
   customCuisines?: string[];
   customMains?: string[];
+  /** Built-in (or other) labels hidden from Settings/library chips. */
+  hiddenCuisines?: string[];
+  hiddenMains?: string[];
 };
 
 export type ExtractedRecipe = {

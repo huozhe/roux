@@ -59,8 +59,16 @@ export default async function SettingsPage() {
     }
   }
 
-  const cuisineOptions = categoryOptions(CUISINES, prefs.customCuisines);
-  const mainOptions = categoryOptions(MAINS, prefs.customMains);
+  const cuisineOptions = categoryOptions(
+    CUISINES,
+    prefs.customCuisines,
+    prefs.hiddenCuisines,
+  );
+  const mainOptions = categoryOptions(
+    MAINS,
+    prefs.customMains,
+    prefs.hiddenMains,
+  );
 
   return (
     <div
@@ -132,6 +140,8 @@ export default async function SettingsPage() {
         <CategoriesEditor
           initialCuisines={cuisineOptions}
           initialMains={mainOptions}
+          initialHiddenCuisines={prefs.hiddenCuisines ?? []}
+          initialHiddenMains={prefs.hiddenMains ?? []}
         />
       </div>
     </div>

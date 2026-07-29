@@ -2,36 +2,54 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CUISINES, MAINS } from "@/lib/categories";
+import {
+  categoryOptions,
+  CUISINES,
+  isBaseCuisine,
+  isBaseMain,
+  MAINS,
+} from "@/lib/categories";
 
 type CategoriesEditorProps = {
   initialCuisines?: string[];
   initialMains?: string[];
+  initialHiddenCuisines?: string[];
+  initialHiddenMains?: string[];
 };
 
 export function CategoriesEditor({
   initialCuisines = [...CUISINES],
   initialMains = [...MAINS],
+  initialHiddenCuisines = [],
+  initialHiddenMains = [],
 }: CategoriesEditorProps) {
   const router = useRouter();
   const [cuisines, setCuisines] = useState(initialCuisines);
   const [mains, setMains] = useState(initialMains);
+  const [hiddenCuisines, setHiddenCuisines] = useState(initialHiddenCuisines);
+  const [hiddenMains, setHiddenMains] = useState(initialHiddenMains);
   const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function persist(
-    nextCuisines: string[],
-    nextMains: string[],
-  ) {
+  async function persist(next: {
+    cuisines: string[];
+    mains: string[];
+    hiddenCuisines: string[];
+    hiddenMains: string[];
+  }) {
+    setBusy(true);
     setStatus("Saving…");
     try {
-      const baseCuisines = CUISINES as readonly string[];
-      const baseMains = MAINS as readonly string[];
+      const customCuisines = next.cuisines.filter((c) => !isBaseCuisine(c));
+      const customMains = next.mains.filter((m) => !isBaseMain(m));
       const res = await fetch("/api/prefs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customCuisines: nextCuisines.filter((c) => !baseCuisines.includes(c)),
-          customMains: nextMains.filter((m) => !baseMains.includes(m)),
+          customCuisines,
+          customMains,
+          hiddenCuisines: next.hiddenCuisines,
+          hiddenMains: next.hiddenMains,
         }),
       });
       if (!res.ok) {
@@ -43,6 +61,8 @@ export function CategoriesEditor({
       router.refresh();
     } catch {
       setStatus("Couldn’t save");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -50,29 +70,128 @@ export function CategoriesEditor({
     const name = window.prompt("Add a cuisine tag");
     const trimmed = name?.trim();
     if (!trimmed) return;
-    if (cuisines.some((c) => c.toLowerCase() === trimmed.toLowerCase())) return;
+    const key = trimmed.toLowerCase();
+    // Unhide if previously removed built-in / label
+    const nextHidden = hiddenCuisines.filter((h) => h.toLowerCase() !== key);
+    if (cuisines.some((c) => c.toLowerCase() === key)) {
+      if (nextHidden.length !== hiddenCuisines.length) {
+        setHiddenCuisines(nextHidden);
+        void persist({
+          cuisines,
+          mains,
+          hiddenCuisines: nextHidden,
+          hiddenMains,
+        });
+      }
+      return;
+    }
     const next = [...cuisines, trimmed];
     setCuisines(next);
-    void persist(next, mains);
+    setHiddenCuisines(nextHidden);
+    void persist({
+      cuisines: next,
+      mains,
+      hiddenCuisines: nextHidden,
+      hiddenMains,
+    });
   }
 
   function addMain() {
     const name = window.prompt("Add a main-ingredient tag");
     const trimmed = name?.trim();
     if (!trimmed) return;
-    if (mains.some((m) => m.toLowerCase() === trimmed.toLowerCase())) return;
+    const key = trimmed.toLowerCase();
+    const nextHidden = hiddenMains.filter((h) => h.toLowerCase() !== key);
+    if (mains.some((m) => m.toLowerCase() === key)) {
+      if (nextHidden.length !== hiddenMains.length) {
+        setHiddenMains(nextHidden);
+        void persist({
+          cuisines,
+          mains,
+          hiddenCuisines,
+          hiddenMains: nextHidden,
+        });
+      }
+      return;
+    }
     const next = [...mains, trimmed];
     setMains(next);
-    void persist(cuisines, next);
+    setHiddenMains(nextHidden);
+    void persist({
+      cuisines,
+      mains: next,
+      hiddenCuisines,
+      hiddenMains: nextHidden,
+    });
   }
+
+  function removeCuisine(label: string) {
+    const key = label.toLowerCase();
+    if (isBaseCuisine(label)) {
+      if (hiddenCuisines.some((h) => h.toLowerCase() === key)) return;
+      // Keep canonical base spelling in hide list
+      const canonical =
+        (CUISINES as readonly string[]).find((c) => c.toLowerCase() === key) ??
+        label;
+      const nextHidden = [...hiddenCuisines, canonical];
+      setHiddenCuisines(nextHidden);
+      setCuisines((prev) => prev.filter((c) => c.toLowerCase() !== key));
+      void persist({
+        cuisines: cuisines.filter((c) => c.toLowerCase() !== key),
+        mains,
+        hiddenCuisines: nextHidden,
+        hiddenMains,
+      });
+      return;
+    }
+    const next = cuisines.filter((c) => c.toLowerCase() !== key);
+    setCuisines(next);
+    void persist({
+      cuisines: next,
+      mains,
+      hiddenCuisines,
+      hiddenMains,
+    });
+  }
+
+  function removeMain(label: string) {
+    const key = label.toLowerCase();
+    if (isBaseMain(label)) {
+      if (hiddenMains.some((h) => h.toLowerCase() === key)) return;
+      const canonical =
+        (MAINS as readonly string[]).find((m) => m.toLowerCase() === key) ??
+        label;
+      const nextHidden = [...hiddenMains, canonical];
+      setHiddenMains(nextHidden);
+      setMains((prev) => prev.filter((m) => m.toLowerCase() !== key));
+      void persist({
+        cuisines,
+        mains: mains.filter((m) => m.toLowerCase() !== key),
+        hiddenCuisines,
+        hiddenMains: nextHidden,
+      });
+      return;
+    }
+    const next = mains.filter((m) => m.toLowerCase() !== key);
+    setMains(next);
+    void persist({
+      cuisines,
+      mains: next,
+      hiddenCuisines,
+      hiddenMains,
+    });
+  }
+
+  const visibleCuisines = categoryOptions(CUISINES, cuisines, hiddenCuisines);
+  const visibleMains = categoryOptions(MAINS, mains, hiddenMains);
 
   return (
     <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
       <h4 style={{ margin: 0 }}>Categories</h4>
       <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-        Tags are guessed by the model when a video is written up and saved here
-        automatically when new. You can also add your own. Filter chips on the
-        library use this list.
+        Library filter chips. Add your own, or remove any tag (×). Built-ins can
+        be restored with + Add using the same name. Model-guessed tags are
+        learned automatically on sync.
         {status ? ` · ${status}` : ""}
       </p>
 
@@ -81,21 +200,26 @@ export function CategoriesEditor({
           Cuisines
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {cuisines.map((c) => (
-            <span key={c} className="tag tag-accent">
-              {c}
-            </span>
+          {visibleCuisines.map((c) => (
+            <CategoryChip
+              key={c}
+              label={c}
+              variant="cuisine"
+              disabled={busy}
+              onRemove={() => removeCuisine(c)}
+            />
           ))}
           <button
             type="button"
             className="tag tag-outline"
             style={{
-              cursor: "pointer",
+              cursor: busy ? "wait" : "pointer",
               background: "transparent",
               fontFamily: "inherit",
               fontSize: 11,
             }}
             onClick={addCuisine}
+            disabled={busy}
           >
             + Add
           </button>
@@ -107,26 +231,80 @@ export function CategoriesEditor({
           Main ingredients
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {mains.map((m) => (
-            <span key={m} className="tag tag-accent-2">
-              {m}
-            </span>
+          {visibleMains.map((m) => (
+            <CategoryChip
+              key={m}
+              label={m}
+              variant="main"
+              disabled={busy}
+              onRemove={() => removeMain(m)}
+            />
           ))}
           <button
             type="button"
             className="tag tag-outline"
             style={{
-              cursor: "pointer",
+              cursor: busy ? "wait" : "pointer",
               background: "transparent",
               fontFamily: "inherit",
               fontSize: 11,
             }}
             onClick={addMain}
+            disabled={busy}
           >
             + Add
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function CategoryChip({
+  label,
+  variant,
+  disabled,
+  onRemove,
+}: {
+  label: string;
+  variant: "cuisine" | "main";
+  disabled?: boolean;
+  onRemove: () => void;
+}) {
+  const tagCls = variant === "cuisine" ? "tag tag-accent" : "tag tag-accent-2";
+  return (
+    <span
+      className={tagCls}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        paddingRight: 8,
+      }}
+    >
+      {label}
+      <button
+        type="button"
+        aria-label={`Remove ${label}`}
+        title="Remove"
+        disabled={disabled}
+        onClick={onRemove}
+        style={{
+          border: 0,
+          background: "transparent",
+          cursor: disabled ? "wait" : "pointer",
+          padding: 0,
+          margin: 0,
+          lineHeight: 1,
+          fontSize: 14,
+          fontWeight: 700,
+          color: "inherit",
+          opacity: 0.75,
+          fontFamily: "inherit",
+        }}
+      >
+        ×
+      </button>
+    </span>
   );
 }

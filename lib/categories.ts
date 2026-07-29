@@ -30,22 +30,37 @@ const BASE_CUISINE_KEYS = new Set(
 );
 const BASE_MAIN_KEYS = new Set(MAINS.map((s) => s.toLowerCase()));
 
-/** Base list + extra labels (deduped, case-insensitive). */
+/**
+ * Base list + extra labels (deduped, case-insensitive).
+ * `hidden` removes labels from the offered chip list (built-in or custom).
+ */
 export function categoryOptions(
   base: readonly string[],
   custom?: string[] | null,
+  hidden?: string[] | null,
 ): string[] {
-  const seen = new Set(base.map((s) => s.toLowerCase()));
-  const out = [...base];
-  for (const raw of custom ?? []) {
+  const hide = new Set(
+    (hidden ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...base, ...(custom ?? [])]) {
     const t = raw.trim();
     if (!t) continue;
     const key = t.toLowerCase();
-    if (seen.has(key)) continue;
+    if (hide.has(key) || seen.has(key)) continue;
     seen.add(key);
     out.push(t);
   }
   return out;
+}
+
+export function isBaseCuisine(label: string): boolean {
+  return BASE_CUISINE_KEYS.has(label.trim().toLowerCase());
+}
+
+export function isBaseMain(label: string): boolean {
+  return BASE_MAIN_KEYS.has(label.trim().toLowerCase());
 }
 
 /**

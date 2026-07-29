@@ -50,4 +50,14 @@ describe("categoryOptions", () => {
     assert.ok(opts.includes("Middle Eastern"));
     assert.equal(opts.filter((x) => x.toLowerCase() === "sichuan").length, 1);
   });
+
+  it("omits hidden labels", () => {
+    const opts = categoryOptions(
+      CUISINES,
+      ["Middle Eastern"],
+      ["Sichuan", "middle eastern"],
+    );
+    assert.ok(!opts.some((x) => x.toLowerCase() === "sichuan"));
+    assert.ok(!opts.some((x) => x.toLowerCase() === "middle eastern"));
+  });
 });

@@ -58,6 +58,24 @@ function parsePrefsPatch(body: unknown): Partial<UserPrefs> | null {
     }
     patch.customMains = b.customMains;
   }
+  if ("hiddenCuisines" in b) {
+    if (
+      !Array.isArray(b.hiddenCuisines) ||
+      !b.hiddenCuisines.every((s) => typeof s === "string")
+    ) {
+      return null;
+    }
+    patch.hiddenCuisines = b.hiddenCuisines;
+  }
+  if ("hiddenMains" in b) {
+    if (
+      !Array.isArray(b.hiddenMains) ||
+      !b.hiddenMains.every((s) => typeof s === "string")
+    ) {
+      return null;
+    }
+    patch.hiddenMains = b.hiddenMains;
+  }
 
   return patch;
 }
