@@ -8,9 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test 'lib/**/*.test.ts'",
-    "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
+    "db:push": "node --import tsx scripts/db-with-env.ts drizzle-kit push",
+    "db:generate": "node --import tsx scripts/db-with-env.ts drizzle-kit generate",
+    "db:studio": "node --import tsx scripts/db-with-env.ts drizzle-kit studio",
     "db:init-schema": "node --import tsx scripts/db-init-schema.ts"
   },
   "dependencies": {
