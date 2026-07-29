@@ -18,7 +18,7 @@ import {
 } from "@/lib/youtube/playlist-items";
 import { getAccessTokenForUser } from "@/lib/youtube/tokens";
 import { fetchTranscriptDetailed } from "@/lib/youtube/transcript";
-import { getVideosStatus } from "@/lib/youtube/videos";
+import { getVideosMeta } from "@/lib/youtube/videos";
 
 export type SyncProgress = {
   stage: string;
@@ -248,6 +248,15 @@ export async function runSyncForUser(
       skipped,
     });
 
+    // Uploader channel (not playlist owner) via videos.list snippet
+    const candidateMeta =
+      candidates.length > 0
+        ? await getVideosMeta(
+            accessToken,
+            candidates.map((c) => c.videoId),
+          )
+        : new Map();
+
     let processedNew = 0;
 
     for (const item of candidates) {
@@ -267,8 +276,16 @@ export async function runSyncForUser(
         continue;
       }
 
+      const meta = candidateMeta.get(item.videoId);
+      const channelTitle =
+        meta?.channelTitle?.trim() || item.channelTitle || "Unknown";
+      const channelId = meta?.channelId || item.channelId || null;
+      const videoTitle = meta?.title?.trim() || item.title;
+      const thumbnailUrl = meta?.thumbnailUrl ?? item.thumbnailUrl;
+      const publishedAtIso = meta?.publishedAt ?? item.publishedAt;
+
       onProgress({
-        stage: `Fetching transcript for “${item.title}”…`,
+        stage: `Fetching transcript for “${videoTitle}”…`,
         found,
         written,
         skipped,
@@ -282,12 +299,12 @@ export async function runSyncForUser(
         skipped += 1;
         detail.needTranscript.push({
           videoId: item.videoId,
-          title: item.title,
+          title: videoTitle,
           playlistId: item.playlistId,
           reason: transcript.reason,
         });
         onProgress({
-          stage: `No transcript — skipped “${item.title}” (${transcript.reason})`,
+          stage: `No transcript — skipped “${videoTitle}” (${transcript.reason})`,
           found,
           written,
           skipped,
@@ -299,7 +316,7 @@ export async function runSyncForUser(
       const cues = transcript.cues;
 
       onProgress({
-        stage: `Writing up “${item.title}”…`,
+        stage: `Writing up “${videoTitle}”…`,
         found,
         written,
         skipped,
@@ -307,16 +324,14 @@ export async function runSyncForUser(
 
       try {
         const extracted = await extractRecipe(cues, {
-          videoTitle: item.title,
+          videoTitle,
         });
 
         const ingredients: Ingredient[] = extracted.ingredients;
         const steps = toSteps(extracted.steps);
         const confidence = confidenceOf(extracted.confidence);
         const addedAt = new Date(item.addedAt);
-        const uploadedAt = item.publishedAt
-          ? new Date(item.publishedAt)
-          : null;
+        const uploadedAt = publishedAtIso ? new Date(publishedAtIso) : null;
 
         if (writeMode === "insert") {
           await db.insert(recipes).values({
@@ -324,10 +339,10 @@ export async function runSyncForUser(
             videoId: item.videoId,
             playlistId: item.playlistId,
             title: extracted.title,
-            videoTitle: item.title,
-            channelTitle: item.channelTitle,
-            channelId: item.channelId || null,
-            thumbnailUrl: item.thumbnailUrl,
+            videoTitle,
+            channelTitle,
+            channelId,
+            thumbnailUrl,
             cuisine: extracted.cuisine,
             mainIngredient: extracted.main_ingredient,
             cookMinutes: extracted.cook_minutes,
@@ -348,10 +363,10 @@ export async function runSyncForUser(
             .set({
               playlistId: item.playlistId,
               title: extracted.title,
-              videoTitle: item.title,
-              channelTitle: item.channelTitle,
-              channelId: item.channelId || null,
-              thumbnailUrl: item.thumbnailUrl ?? undefined,
+              videoTitle,
+              channelTitle,
+              channelId,
+              thumbnailUrl: thumbnailUrl ?? undefined,
               cuisine: extracted.cuisine,
               mainIngredient: extracted.main_ingredient,
               cookMinutes: extracted.cook_minutes,
@@ -436,16 +451,28 @@ export async function runSyncForUser(
       }
     }
 
-    // gone: videos.list empty — batch active library ids
+    // gone + backfill uploader channel from videos.list snippet
     const statusIds = activeLibrary.map((r) => r.videoId);
     if (statusIds.length > 0) {
-      const statuses = await getVideosStatus(accessToken, statusIds);
+      const statuses = await getVideosMeta(accessToken, statusIds);
       for (const row of activeLibrary) {
         const st = statuses.get(row.videoId);
-        if (st && !st.exists && row.videoStatus !== "gone") {
+        if (!st) continue;
+        if (!st.exists && row.videoStatus !== "gone") {
           await db
             .update(recipes)
             .set({ videoStatus: "gone" })
+            .where(eq(recipes.id, row.id));
+          continue;
+        }
+        // Credit the video uploader (not playlist owner)
+        if (st.exists && st.channelTitle) {
+          await db
+            .update(recipes)
+            .set({
+              channelTitle: st.channelTitle,
+              ...(st.channelId ? { channelId: st.channelId } : {}),
+            })
             .where(eq(recipes.id, row.id));
         }
       }

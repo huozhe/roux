@@ -5,6 +5,10 @@
 export type PlaylistItem = {
   videoId: string;
   title: string;
+  /**
+   * From playlistItems — often the *playlist owner*, not the uploader.
+   * Prefer videos.list snippet for credit (see getVideosMeta).
+   */
   channelTitle: string;
   channelId: string;
   thumbnailUrl: string | null;
