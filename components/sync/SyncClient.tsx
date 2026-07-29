@@ -38,7 +38,6 @@ type CaptionSkipItem = {
   videoId: string;
   title: string;
   kind: string;
-  reason?: string | null;
 };
 
 function parseHistory(json: unknown): SyncRunRow[] {
@@ -126,9 +125,11 @@ export function SyncClient() {
   const [captionSkips, setCaptionSkips] = useState<{
     no_captions: CaptionSkipItem[];
     auth_blocked: CaptionSkipItem[];
-  }>({ no_captions: [], auth_blocked: [] });
+    unavailable: CaptionSkipItem[];
+  }>({ no_captions: [], auth_blocked: [], unavailable: [] });
   const [expandNoCaptions, setExpandNoCaptions] = useState(false);
   const [expandAuthBlocked, setExpandAuthBlocked] = useState(false);
+  const [expandUnavailable, setExpandUnavailable] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -202,11 +203,13 @@ export function SyncClient() {
           groups?: {
             no_captions?: CaptionSkipItem[];
             auth_blocked?: CaptionSkipItem[];
+            unavailable?: CaptionSkipItem[];
           };
         };
         setCaptionSkips({
           no_captions: data.groups?.no_captions ?? [],
           auth_blocked: data.groups?.auth_blocked ?? [],
+          unavailable: data.groups?.unavailable ?? [],
         });
       }
     } catch (e) {
@@ -559,10 +562,17 @@ export function SyncClient() {
       />
       <CaptionSkipSection
         title="Auth blocked"
-        hint="YouTube LOGIN_REQUIRED / cookie-IP blocks. Fix cookies then clear skips by re-sync after captions work — or leave skipped."
+        hint="YouTube LOGIN_REQUIRED / cookie-IP. Sync skips these. Refresh cookies if you expect captions."
         items={captionSkips.auth_blocked}
         expanded={expandAuthBlocked}
         onToggle={() => setExpandAuthBlocked((v) => !v)}
+      />
+      <CaptionSkipSection
+        title="Unavailable / deleted"
+        hint="Gone or terminated videos. Sync skips these automatically."
+        items={captionSkips.unavailable}
+        expanded={expandUnavailable}
+        onToggle={() => setExpandUnavailable((v) => !v)}
       />
 
       <div className="card" style={{ padding: 22, gap: "13.2px" }}>
@@ -706,9 +716,6 @@ function CaptionSkipSection({
             <div
               key={item.videoId}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
                 padding: "10px 13.2px",
                 borderRadius: 16,
                 background: "var(--color-bg)",
@@ -722,11 +729,6 @@ function CaptionSkipSection({
               >
                 {item.title || item.videoId}
               </a>
-              {item.reason ? (
-                <span className="text-muted" style={{ fontSize: 12.5 }}>
-                  {item.reason}
-                </span>
-              ) : null}
             </div>
           ))}
         </div>

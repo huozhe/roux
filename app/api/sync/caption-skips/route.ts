@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveAppUserId } from "@/lib/recipes/auth";
-import {
-  backfillCaptionSkipsFromLastRun,
-  listCaptionSkips,
-} from "@/lib/sync/caption-skips";
+import { listCaptionSkips } from "@/lib/sync/caption-skips";
 
 /**
  * GET /api/sync/caption-skips
- * Persisted no_captions + auth_blocked videos (skipped on future syncs).
+ * Persisted skip statuses: no_captions | auth_blocked | unavailable.
+ * (No failure-message blobs — kind + title only.)
  */
 export async function GET() {
   const session = await auth().catch(() => null);
@@ -21,20 +19,21 @@ export async function GET() {
   }
 
   try {
-    // One-shot backfill from recent sync run details (idempotent upserts).
-    await backfillCaptionSkipsFromLastRun(userId).catch(() => 0);
     const items = await listCaptionSkips(userId);
     const noCaptions = items.filter((i) => i.kind === "no_captions");
     const authBlocked = items.filter((i) => i.kind === "auth_blocked");
+    const unavailable = items.filter((i) => i.kind === "unavailable");
     return NextResponse.json({
       items,
       groups: {
         no_captions: noCaptions,
         auth_blocked: authBlocked,
+        unavailable,
       },
       counts: {
         no_captions: noCaptions.length,
         auth_blocked: authBlocked.length,
+        unavailable: unavailable.length,
         total: items.length,
       },
     });

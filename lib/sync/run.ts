@@ -326,7 +326,6 @@ export async function runSyncForUser(
             videoId: item.videoId,
             title: videoTitle,
             kind: transcript.kind,
-            reason: short,
             playlistId: item.playlistId,
           }).catch(() => {
             /* non-fatal */

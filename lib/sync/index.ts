@@ -17,7 +17,6 @@ export {
 export {
   listCaptionSkips,
   upsertCaptionSkip,
-  backfillCaptionSkipsFromLastRun,
   type CaptionSkipRow,
   type CaptionSkipKind,
 } from "./caption-skips";
