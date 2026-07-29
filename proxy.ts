@@ -8,6 +8,11 @@ import { authConfig } from "@/lib/auth.config";
  */
 const { auth } = NextAuth(authConfig);
 
+/** Until Google OAuth env is set, allow fixture UI without login (local/dev). */
+const authConfigured = Boolean(
+  process.env.AUTH_GOOGLE_ID && process.env.AUTH_SECRET,
+);
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const loggedIn = !!req.auth;
@@ -18,6 +23,10 @@ export default auth((req) => {
     pathname.startsWith("/r/") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron"); // CRON_SECRET checked in route
+
+  if (!authConfigured) {
+    return NextResponse.next();
+  }
 
   if (!loggedIn && !isPublic) {
     const url = req.nextUrl.clone();
