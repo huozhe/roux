@@ -576,9 +576,10 @@ export function SyncClient() {
               </div>
             ))}
             <p className="text-muted" style={{ margin: 0, fontSize: 12.5 }}>
-              Public videos with CC should work. Private videos, or captions
-              only available after login in the browser, often cannot be read
-              by the server.
+              If you see LOGIN_REQUIRED, YouTube is blocking this server IP.
+              Set Vercel env <code>YOUTUBE_COOKIES</code> to your browser Cookie
+              header from youtube.com (while signed in), redeploy, then sync
+              again. Private videos still may not work.
             </p>
           </div>
         ) : null}

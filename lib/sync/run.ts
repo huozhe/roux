@@ -274,9 +274,10 @@ export async function runSyncForUser(
         skipped,
       });
 
-      const transcript = await fetchTranscriptDetailed(item.videoId, {
-        accessToken,
-      });
+      // Do not pass OAuth accessToken to transcript fetch — innertube rejects
+      // youtube.readonly Bearer tokens (403 insufficient scopes). Use optional
+      // YOUTUBE_COOKIES env for cloud/Vercel LOGIN_REQUIRED instead.
+      const transcript = await fetchTranscriptDetailed(item.videoId);
       if (!transcript.ok) {
         skipped += 1;
         detail.needTranscript.push({

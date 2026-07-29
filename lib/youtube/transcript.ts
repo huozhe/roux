@@ -1,9 +1,14 @@
 /**
  * Fetch timed captions for a YouTube video.
  *
- * Uses YouTube ANDROID/IOS innertube player (WEB is often UNPLAYABLE from cloud).
- * Important: do NOT send Google OAuth Bearer on the first attempt — it can make
- * the player endpoint fail; only retry with token for unlisted/private access.
+ * Cloud IPs (e.g. Vercel) often get LOGIN_REQUIRED from anonymous innertube.
+ * Strategy:
+ *  1) ANDROID/IOS player without OAuth (works on many residential networks)
+ *  2) Same clients with optional YOUTUBE_COOKIES (browser session — best for Vercel)
+ *  3) Watch-page scrape for caption track URLs + timedtext download
+ *
+ * Do NOT send Google OAuth Bearer to innertube — youtube.readonly tokens return
+ * "insufficient authentication scopes" (403) and are not a YouTube web session.
  */
 import type { CaptionCue } from "@/lib/extract";
 
@@ -11,10 +16,17 @@ const ANDROID_VERSION = "20.10.38";
 const IOS_VERSION = "20.10.4";
 const WEB_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)";
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 export type TranscriptFetchOpts = {
-  /** Google OAuth access token — used only as a retry for restricted videos. */
+  /**
+   * @deprecated OAuth Bearer is not used for innertube (causes 403 with readonly scope).
+   * Kept for call-site compatibility.
+   */
   accessToken?: string;
+  /** Optional cookie header override; defaults to process.env.YOUTUBE_COOKIES */
+  cookies?: string;
 };
 
 type CaptionTrack = {
@@ -57,6 +69,18 @@ const CLIENTS: ClientSpec[] = [
     extraClient: { hl: "en", gl: "US", deviceModel: "iPhone16,2" },
   },
 ];
+
+/** Consent cookies that often unlock anonymous access. */
+const DEFAULT_CONSENT =
+  "CONSENT=YES+cb.20210328-17-p0.en+FX+667; SOCS=CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwODI5LjA3X3AxGgJlbiACGgYIgLnPpwY";
+
+function resolveCookies(opts?: TranscriptFetchOpts): string {
+  const fromOpts = opts?.cookies?.trim();
+  if (fromOpts) return fromOpts;
+  const fromEnv = process.env.YOUTUBE_COOKIES?.trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_CONSENT;
+}
 
 function decodeXmlEntities(s: string): string {
   return s
@@ -160,9 +184,40 @@ function parseJson3Captions(raw: string): CaptionCue[] {
   return cues;
 }
 
+/** Parse WebVTT into cues. */
+function parseVttCaptions(vtt: string): CaptionCue[] {
+  const cues: CaptionCue[] = [];
+  // 00:00:01.200 --> 00:00:03.400
+  const re =
+    /(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(?:(\d{2}):)?(\d{2}):(\d{2})\.(\d{3})[^\n]*\n([\s\S]*?)(?=\n\n|\n(?:\d{2}:)?\d{2}:\d{2}\.|\s*$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(vtt))) {
+    const start =
+      Number(m[1] ?? 0) * 3600 +
+      Number(m[2]) * 60 +
+      Number(m[3]) +
+      Number(m[4]) / 1000;
+    const end =
+      Number(m[5] ?? 0) * 3600 +
+      Number(m[6]) * 60 +
+      Number(m[7]) +
+      Number(m[8]) / 1000;
+    const text = stripTags(m[9] ?? "").replace(/\n/g, " ");
+    if (!text) continue;
+    cues.push({
+      text,
+      start_seconds: start,
+      duration_seconds: Math.max(0, end - start),
+    });
+  }
+  return cues;
+}
+
 function parseCaptionBody(body: string): CaptionCue[] {
   if (!body) return [];
-  if (body.startsWith("{") || body.startsWith("[")) {
+  const trimmed = body.trim();
+  if (trimmed.startsWith("WEBVTT")) return parseVttCaptions(body);
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     return parseJson3Captions(body);
   }
   const srv3 = parseSrv3Captions(body);
@@ -174,7 +229,6 @@ function rankTracks(tracks: CaptionTrack[]): CaptionTrack[] {
   const score = (t: CaptionTrack) => {
     let s = 0;
     const lang = (t.languageCode ?? "").toLowerCase();
-    // Prefer English for Claude extraction quality, but accept zh/etc.
     if (lang === "en" || lang.startsWith("en-") || lang.startsWith("en_")) s += 10;
     if (lang.startsWith("zh")) s += 8;
     if (t.vssId?.includes(".en")) s += 5;
@@ -188,29 +242,73 @@ function pickTrack(tracks: CaptionTrack[]): CaptionTrack | null {
   return rankTracks(tracks)[0] ?? null;
 }
 
-type PlayerAttempt =
-  | { ok: true; player: PlayerResponse; client: string; withAuth: boolean }
-  | { ok: false; client: string; withAuth: boolean; error: string };
+function extractJsonObject(source: string, start: number): string | null {
+  if (source[start] !== "{") return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i]!;
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  return null;
+}
 
-async function fetchPlayer(
+function playerFromHtml(html: string): PlayerResponse | null {
+  for (const marker of [
+    "ytInitialPlayerResponse = ",
+    "ytInitialPlayerResponse=",
+    "var ytInitialPlayerResponse = ",
+  ]) {
+    const idx = html.indexOf(marker);
+    if (idx === -1) continue;
+    const start = html.indexOf("{", idx + marker.length);
+    if (start === -1) continue;
+    const raw = extractJsonObject(html, start);
+    if (!raw) continue;
+    try {
+      return JSON.parse(raw) as PlayerResponse;
+    } catch {
+      /* next */
+    }
+  }
+  return null;
+}
+
+type PlayerAttempt =
+  | { ok: true; player: PlayerResponse; via: string }
+  | { ok: false; via: string; error: string };
+
+async function fetchPlayerInnertube(
   videoId: string,
   client: ClientSpec,
-  accessToken?: string,
+  cookies: string,
 ): Promise<PlayerAttempt> {
-  const withAuth = Boolean(accessToken);
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "User-Agent": client.userAgent,
-    };
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
     const resp = await fetch(
       "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
       {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": client.userAgent,
+          Cookie: cookies,
+          "Accept-Language": "en-US,en;q=0.9,zh;q=0.8",
+        },
         body: JSON.stringify({
           context: {
             client: {
@@ -229,18 +327,58 @@ async function fetchPlayer(
       const text = await resp.text().catch(() => "");
       return {
         ok: false,
-        client: client.name,
-        withAuth,
-        error: `HTTP ${resp.status}${text ? `: ${text.slice(0, 120)}` : ""}`,
+        via: client.name,
+        error: `HTTP ${resp.status}${text ? `: ${text.slice(0, 100)}` : ""}`,
       };
     }
     const player = (await resp.json()) as PlayerResponse;
-    return { ok: true, player, client: client.name, withAuth };
+    return { ok: true, player, via: client.name };
   } catch (err) {
     return {
       ok: false,
-      client: client.name,
-      withAuth,
+      via: client.name,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function fetchPlayerFromWatchPage(
+  videoId: string,
+  cookies: string,
+): Promise<PlayerAttempt> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/watch?v=${videoId}&hl=en&bpctr=9999999999&has_verified=1`,
+      {
+        headers: {
+          "User-Agent": BROWSER_UA,
+          Cookie: cookies,
+          "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
+          Accept: "text/html,application/xhtml+xml",
+        },
+        redirect: "follow",
+      },
+    );
+    if (!res.ok) {
+      return { ok: false, via: "WATCH_HTML", error: `HTTP ${res.status}` };
+    }
+    const html = await res.text();
+    if (html.includes('class="g-recaptcha"')) {
+      return { ok: false, via: "WATCH_HTML", error: "captcha required" };
+    }
+    const player = playerFromHtml(html);
+    if (!player) {
+      return {
+        ok: false,
+        via: "WATCH_HTML",
+        error: "ytInitialPlayerResponse not found",
+      };
+    }
+    return { ok: true, player, via: "WATCH_HTML" };
+  } catch (err) {
+    return {
+      ok: false,
+      via: "WATCH_HTML",
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -249,37 +387,46 @@ async function fetchPlayer(
 async function downloadTrack(
   baseUrl: string,
   videoId: string,
+  cookies: string,
 ): Promise<CaptionCue[] | null> {
+  const attempts: string[] = [baseUrl];
   try {
-    const attempts: string[] = [];
-    try {
-      // Default (often srv3) first — most reliable
-      attempts.push(baseUrl);
-      const srv3 = new URL(baseUrl);
-      srv3.searchParams.set("fmt", "srv3");
-      attempts.push(srv3.toString());
-      const json3 = new URL(baseUrl);
-      json3.searchParams.set("fmt", "json3");
-      attempts.push(json3.toString());
-    } catch {
-      attempts.push(baseUrl);
-    }
-
-    for (const url of attempts) {
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": WEB_UA,
-          Referer: `https://www.youtube.com/watch?v=${videoId}`,
-          "Accept-Language": "en-US,en;q=0.9,zh;q=0.8",
-        },
-      });
-      if (!res.ok) continue;
-      const body = await res.text();
-      const cues = parseCaptionBody(body);
-      if (cues.length) return cues;
-    }
+    const srv3 = new URL(baseUrl);
+    srv3.searchParams.set("fmt", "srv3");
+    attempts.push(srv3.toString());
+    const json3 = new URL(baseUrl);
+    json3.searchParams.set("fmt", "json3");
+    attempts.push(json3.toString());
+    const vtt = new URL(baseUrl);
+    vtt.searchParams.set("fmt", "vtt");
+    attempts.push(vtt.toString());
   } catch {
-    return null;
+    /* base only */
+  }
+
+  const userAgents = [WEB_UA, BROWSER_UA];
+
+  for (const ua of userAgents) {
+    for (const url of attempts) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": ua,
+            Cookie: cookies,
+            Referer: `https://www.youtube.com/watch?v=${videoId}`,
+            Origin: "https://www.youtube.com",
+            "Accept-Language": "en-US,en;q=0.9,zh;q=0.8",
+            Accept: "*/*",
+          },
+        });
+        if (!res.ok) continue;
+        const body = await res.text();
+        const cues = parseCaptionBody(body);
+        if (cues.length) return cues;
+      } catch {
+        /* next */
+      }
+    }
   }
   return null;
 }
@@ -287,15 +434,14 @@ async function downloadTrack(
 async function cuesFromPlayer(
   player: PlayerResponse,
   videoId: string,
-): Promise<
-  | { ok: true; cues: CaptionCue[] }
-  | { ok: false; reason: string }
-> {
+  cookies: string,
+  via: string,
+): Promise<TranscriptResult> {
   const status = player.playabilityStatus?.status;
   if (status && status !== "OK") {
     return {
       ok: false,
-      reason: `video ${status}${player.playabilityStatus?.reason ? `: ${player.playabilityStatus.reason}` : ""}`,
+      reason: `${via}: video ${status}${player.playabilityStatus?.reason ? ` (${player.playabilityStatus.reason})` : ""}`,
     };
   }
 
@@ -304,8 +450,7 @@ async function cuesFromPlayer(
   if (!tracks.length) {
     return {
       ok: false,
-      reason:
-        "no caption tracks on player (video may lack CC, or be private/restricted)",
+      reason: `${via}: no caption tracks (LOGIN_REQUIRED or captions off)`,
     };
   }
 
@@ -315,13 +460,13 @@ async function cuesFromPlayer(
     if (!track.baseUrl) continue;
     const label = `${track.languageCode ?? "?"}${track.kind === "asr" ? "/asr" : ""}`;
     tried.push(label);
-    const cues = await downloadTrack(track.baseUrl, videoId);
+    const cues = await downloadTrack(track.baseUrl, videoId, cookies);
     if (cues?.length) return { ok: true, cues };
   }
 
   return {
     ok: false,
-    reason: `caption download empty (tracks: ${tried.join(", ") || "none"})`,
+    reason: `${via}: caption body empty (tracks: ${tried.join(", ")})`,
   };
 }
 
@@ -340,62 +485,67 @@ export async function fetchTranscriptDetailed(
     return { ok: false, reason: "invalid video id" };
   }
 
+  const cookies = resolveCookies(opts);
+  const hasUserCookies = Boolean(
+    opts?.cookies?.trim() || process.env.YOUTUBE_COOKIES?.trim(),
+  );
   const attempts: string[] = [];
-  let lastPlayerFail = "";
 
-  // 1) Clients without OAuth (public path — preferred)
-  // 2) Same clients with OAuth only if needed
-  const authModes: Array<string | undefined> = [undefined];
-  if (opts?.accessToken) authModes.push(opts.accessToken);
-
-  for (const token of authModes) {
-    for (const client of CLIENTS) {
-      const attempt = await fetchPlayer(videoId, client, token);
-      if (!attempt.ok) {
-        attempts.push(
-          `${client.name}${token ? "+auth" : ""}: ${attempt.error}`,
-        );
-        lastPlayerFail = attempt.error;
-        continue;
-      }
-
-      const tracks =
-        attempt.player.captions?.playerCaptionsTracklistRenderer
-          ?.captionTracks ?? [];
-      const status = attempt.player.playabilityStatus?.status ?? "?";
-
-      // If playable with tracks, download
-      if (status === "OK" && tracks.length) {
-        const result = await cuesFromPlayer(attempt.player, videoId);
-        if (result.ok) return result;
-        attempts.push(
-          `${client.name}${token ? "+auth" : ""}: ${result.reason}`,
-        );
-        continue;
-      }
-
-      attempts.push(
-        `${client.name}${token ? "+auth" : ""}: status=${status} tracks=${tracks.length}`,
-      );
-      lastPlayerFail = `status=${status} tracks=${tracks.length}`;
+  // Innertube ANDROID/IOS with consent (and optional user cookies)
+  for (const client of CLIENTS) {
+    const attempt = await fetchPlayerInnertube(videoId, client, cookies);
+    if (!attempt.ok) {
+      attempts.push(`${attempt.via}: ${attempt.error}`);
+      continue;
     }
+    const result = await cuesFromPlayer(
+      attempt.player,
+      videoId,
+      cookies,
+      attempt.via,
+    );
+    if (result.ok) return result;
+    attempts.push(result.reason);
   }
 
-  if (attempts.length === 0) {
-    return { ok: false, reason: "player request failed" };
+  // Watch-page scrape (can still list tracks when innertube says LOGIN_REQUIRED)
+  const htmlAttempt = await fetchPlayerFromWatchPage(videoId, cookies);
+  if (htmlAttempt.ok) {
+    // Prefer timedtext download using ANDROID-style UA; HTML-signed URLs often empty,
+    // but still try. If we only have HTML tracks, try each.
+    const result = await cuesFromPlayer(
+      htmlAttempt.player,
+      videoId,
+      cookies,
+      htmlAttempt.via,
+    );
+    if (result.ok) return result;
+    attempts.push(result.reason);
+  } else {
+    attempts.push(`${htmlAttempt.via}: ${htmlAttempt.error}`);
   }
 
-  // Compact reason for UI
-  const summary = attempts.slice(0, 4).join(" · ");
+  const loginRequired = attempts.some((a) =>
+    /LOGIN_REQUIRED|Sign in to confirm/i.test(a),
+  );
+
+  if (loginRequired && !hasUserCookies) {
+    return {
+      ok: false,
+      reason:
+        "YouTube blocked anonymous caption access from this server (LOGIN_REQUIRED). " +
+        "Set env YOUTUBE_COOKIES to a browser cookie string from youtube.com while logged in " +
+        "(export with a cookies.txt extension, paste the Cookie header value). " +
+        `Details: ${attempts.slice(0, 3).join(" · ")}`,
+    };
+  }
+
   return {
     ok: false,
-    reason: `player/captions failed (${summary})${lastPlayerFail && attempts.length > 4 ? "…" : ""}`,
+    reason: `player/captions failed (${attempts.slice(0, 4).join(" · ")})`,
   };
 }
 
-/**
- * Timed caption cues for a video, or null if unavailable / error.
- */
 export async function fetchTranscriptCues(
   videoId: string,
   opts?: TranscriptFetchOpts,
@@ -404,12 +554,13 @@ export async function fetchTranscriptCues(
   return result.ok ? result.cues : null;
 }
 
-/** Exported for unit tests. */
 export const _test = {
   parseXmlCaptions,
   parseJson3Captions,
   parseSrv3Captions,
+  parseVttCaptions,
   pickTrack,
   stripTags,
   parseCaptionBody,
+  playerFromHtml,
 };
