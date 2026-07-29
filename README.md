@@ -51,4 +51,14 @@ Without Google env, auth gate is open so fixtures work:
 
 ### Auth + DB (when ready)
 
-Copy `.env.example` → `.env.local`, set Google OAuth + Neon + `TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32`), then `npm run db:push` and apply `lib/db/migrations/0001_search.sql`.
+Copy `.env.example` → `.env.local`, set Google OAuth + Neon + `TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32`).
+
+All tables live in the Postgres **schema** `roux` (not `public`):
+
+```bash
+npm run db:init-schema   # CREATE SCHEMA IF NOT EXISTS roux
+npm run db:push          # tables → roux.users, roux.recipes, …
+# Neon SQL editor: run lib/db/migrations/0001_search.sql (FTS on roux.recipes)
+```
+
+If you already pushed into `public` earlier, optionally run `lib/db/migrations/0000_drop_public_if_legacy.sql` then re-push into `roux`.

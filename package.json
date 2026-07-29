@@ -10,7 +10,8 @@
     "test": "tsx --test 'lib/**/*.test.ts'",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:init-schema": "node --import tsx scripts/db-init-schema.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

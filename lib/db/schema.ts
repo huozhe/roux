@@ -4,9 +4,9 @@ import {
   index,
   integer,
   jsonb,
-  pgTable,
   bigserial,
   primaryKey,
+  pgSchema,
   text,
   timestamp,
   unique,
@@ -14,7 +14,13 @@ import {
 } from "drizzle-orm/pg-core";
 import type { Ingredient, Step, UserPrefs } from "@/lib/types";
 
-export const users = pgTable("users", {
+/**
+ * All app tables live in the `roux` schema (not `public`).
+ * Postgres term: schema = namespace. Tablespace = physical storage (unused here).
+ */
+export const roux = pgSchema("roux");
+
+export const users = roux.table("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"),
@@ -32,7 +38,7 @@ export const users = pgTable("users", {
     .defaultNow(),
 });
 
-export const playlists = pgTable("playlists", {
+export const playlists = roux.table("playlists", {
   id: text("id").primaryKey(), // YouTube playlist id
   userId: uuid("user_id")
     .notNull()
@@ -44,7 +50,7 @@ export const playlists = pgTable("playlists", {
   lastSynced: timestamp("last_synced", { withTimezone: true }),
 });
 
-export const recipes = pgTable(
+export const recipes = roux.table(
   "recipes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -84,11 +90,7 @@ export const recipes = pgTable(
       .defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
-    // Full-text search: add via SQL migration (generated tsvector + GIN).
-    // See lib/db/migrations/0001_search.sql
-    // search tsvector GENERATED ALWAYS AS (
-    //   to_tsvector('english', coalesce(title,'') || ' ' || ... || coalesce(ingredients::text,''))
-    // ) STORED;
+    // FTS: lib/db/migrations/0001_search.sql → roux.recipes.search
   },
   (t) => [
     unique("recipes_user_video").on(t.userId, t.videoId),
@@ -97,7 +99,7 @@ export const recipes = pgTable(
   ],
 );
 
-export const shareLinks = pgTable("share_links", {
+export const shareLinks = roux.table("share_links", {
   slug: text("slug").primaryKey(),
   recipeId: uuid("recipe_id")
     .notNull()
@@ -108,7 +110,7 @@ export const shareLinks = pgTable("share_links", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
-export const syncRuns = pgTable("sync_runs", {
+export const syncRuns = roux.table("sync_runs", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   userId: uuid("user_id")
     .notNull()
@@ -125,7 +127,7 @@ export const syncRuns = pgTable("sync_runs", {
 });
 
 /** Hard-delete tombstones so sync never re-adds a permanently removed video. */
-export const recipeTombstones = pgTable(
+export const recipeTombstones = roux.table(
   "recipe_tombstones",
   {
     userId: uuid("user_id")
