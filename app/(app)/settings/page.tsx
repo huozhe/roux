@@ -1,13 +1,18 @@
+import { AccountCard } from "@/components/settings/AccountCard";
 import { CategoriesEditor } from "@/components/settings/CategoriesEditor";
 import { ExportButtons } from "@/components/settings/ExportButtons";
+import { PlaylistPicker } from "@/components/settings/PlaylistPicker";
 import { PrefsForm } from "@/components/settings/PrefsForm";
 import { ShareLinksList } from "@/components/settings/ShareLinksList";
+import { auth } from "@/lib/auth";
 
 export const metadata = {
   title: "Settings · Roux",
 };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await auth().catch(() => null);
+
   return (
     <div
       style={{
@@ -34,21 +39,25 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Account — T1 / auth */}
-        <div className="card elev-sm" style={{ padding: 22, gap: "17.6px" }}>
-          <h4 style={{ margin: 0 }}>Account</h4>
-          <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-            Sign in required
-          </p>
-        </div>
+        {session?.user ? (
+          <AccountCard />
+        ) : (
+          <div className="card elev-sm" style={{ padding: 22, gap: "17.6px" }}>
+            <h4 style={{ margin: 0 }}>Account</h4>
+            <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
+              Sign in with Google to load your YouTube playlists and sync.
+            </p>
+            <a
+              href="/login"
+              className="btn btn-primary"
+              style={{ marginTop: 0, alignSelf: "flex-start" }}
+            >
+              Continue with Google
+            </a>
+          </div>
+        )}
 
-        {/* Playlists — T4 */}
-        <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
-          <h4 style={{ margin: 0 }}>Source playlists</h4>
-          <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
-            Playlists load after auth
-          </p>
-        </div>
+        <PlaylistPicker />
 
         <PrefsForm />
 
