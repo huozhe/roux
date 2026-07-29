@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { signIn } from "@/lib/auth";
 
 function RouxMark({ size = 22 }: { size?: number }) {
   return (
@@ -75,29 +75,35 @@ export default function LoginPage() {
         </div>
 
         <div className="card elev-md" style={{ gap: "13.2px", padding: 22 }}>
-          {/* Wired to Auth.js in T1 */}
-          <Link
-            href="/api/auth/signin"
-            className="btn btn-primary btn-block"
-            style={{ minHeight: 46, fontSize: 15, marginTop: 0 }}
+          <form
+            action={async () => {
+              "use server";
+              await signIn("google", { redirectTo: "/" });
+            }}
           >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ marginRight: 4 }}
-              aria-hidden
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              style={{ minHeight: 46, fontSize: 15, marginTop: 0, width: "100%" }}
             >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 3a9 9 0 0 0 0 18" />
-            </svg>
-            Continue with Google
-          </Link>
+              <svg
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ marginRight: 4 }}
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 3a9 9 0 0 0 0 18" />
+              </svg>
+              Continue with Google
+            </button>
+          </form>
 
           <div
             style={{
