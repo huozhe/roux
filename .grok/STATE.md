@@ -1,26 +1,26 @@
-# Session State - Roux playlist picker ship
+# Session State - Roux sync harden ship
 
 **Date**: 2026-07-29
 
 ## Current Objective
-Ship private YouTube cooking playlist → searchable recipe library (v1). Playlist picker UX shipped; next T9 polish + manual E2E.
+Ship private YouTube cooking playlist → searchable recipe library (v1). Sync/extract hardening shipped; bulk sync continues locally with YOUTUBE_COOKIES.
 
 ## Next Concrete Step
-Manual E2E Settings playlists (selected-only → Refresh → full list). Then T9 mobile/empty/error polish.
+`npm run sync -- --max=50` (or higher) with cookies to clear remaining LOGIN_REQUIRED backlog. T9 polish when ready.
 
 ## Key Context to Load
-- Plan: `docs/plans/v1-implementation.md` (M4 done; T9 open)
 - Prod: https://roux-green.vercel.app
-- Playlists: GET stored default; `?refresh=1` for YouTube; UI selected-only until refresh
-- Categories: LLM labels auto-learned into prefs; library chips merge base+prefs+recipes
-- Sync local-only (`npm run sync`)
+- Local sync only; `YOUTUBE_COOKIES` in `.env.local` (works for captions)
+- `--max` counts writes/extract attempts only, not caption fails
+- All 143 recipes marked verified in DB (manual) so re-extract skipped
+- Head: `01bd1f4` extract retries + max_tokens 8k + prose JSON parse
 
 ## Important Decisions & Invariants
-- No YouTube cookies on Vercel; session user.id = app UUID
-- Notes/verified never on public share; never overwrite verified on re-extract
+- No cookies on Vercel; never overwrite verified on re-extract
+- Session user.id = app UUID
 
 ## Verification
 ```bash
 npm test && npx tsc --noEmit
-# Settings: only selected playlists; Refresh list shows full catalog
+npm run sync -- --max=1
 ```
