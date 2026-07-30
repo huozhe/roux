@@ -509,12 +509,14 @@ export function RecipeDetail({
         <div className="dialog-backdrop" role="presentation" onClick={() => setShareOpen(false)}>
           <div
             className="dialog"
-            style={{ width: "min(480px, 100%)" }}
             role="dialog"
-            aria-modal
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="dialog-title">Share “{recipe.title}”</div>
+            <div className="dialog-title" id="share-dialog-title">
+              Share “{recipe.title}”
+            </div>
             <div className="dialog-body">
               Anyone with the link can read the ingredients and steps. Your notes
               and your verified flags are never included.
@@ -522,17 +524,19 @@ export function RecipeDetail({
             <div
               style={{
                 display: "flex",
+                flexWrap: "wrap",
                 alignItems: "center",
                 gap: 10,
-                padding: "10px 17.6px",
-                borderRadius: 999,
+                padding: "10px 14px",
+                borderRadius: 20,
                 background: "var(--color-bg)",
                 border: "1px solid var(--color-divider)",
+                minWidth: 0,
               }}
             >
               <span
                 style={{
-                  flex: 1,
+                  flex: "1 1 140px",
                   minWidth: 0,
                   fontSize: 13.5,
                   overflow: "hidden",
@@ -1024,6 +1028,7 @@ function SplitLayout({
           padding: 22,
           position: "sticky",
           top: 90,
+          zIndex: 1,
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>

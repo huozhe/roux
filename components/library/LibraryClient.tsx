@@ -195,7 +195,8 @@ export function LibraryClient({
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ fontSize: 34, margin: 0 }}>Library</h1>
           <div className="text-muted" style={{ fontSize: 13 }}>
-            {totalLibrary} of 500 recipes written up · synced {lastSyncLabel}
+            {totalLibrary} recipe{totalLibrary === 1 ? "" : "s"} · synced{" "}
+            {lastSyncLabel}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 240, position: "relative" }}>
@@ -395,17 +396,21 @@ export function LibraryClient({
 
         {view === "library" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8.8 }}>
-            <ChipRow
+            <FilterField
               label="Cuisine"
               options={cuisineOptions}
               selected={cuisine}
               onToggle={(v) => toggleChip("cuisine", v)}
+              onSelectOne={(v) => setCuisine(v ? [v] : [])}
+              allLabel="All cuisines"
             />
-            <ChipRow
+            <FilterField
               label="Main"
               options={mainOptions}
               selected={main}
               onToggle={(v) => toggleChip("main", v)}
+              onSelectOne={(v) => setMain(v ? [v] : [])}
+              allLabel="All mains"
             />
             <div
               style={{
@@ -636,16 +641,20 @@ export function LibraryClient({
   );
 }
 
-function ChipRow({
+function FilterField({
   label,
   options,
   selected,
   onToggle,
+  onSelectOne,
+  allLabel,
 }: {
   label: string;
   options: readonly string[];
   selected: string[];
   onToggle: (value: string) => void;
+  onSelectOne: (value: string | null) => void;
+  allLabel: string;
 }) {
   return (
     <div
@@ -663,31 +672,47 @@ function ChipRow({
           textTransform: "uppercase",
           color: "var(--color-neutral-600)",
           width: 74,
+          flex: "none",
         }}
       >
         {label}
       </div>
-      {options.map((opt) => {
-        const on = selected.includes(opt);
-        return (
-          <button
-            key={opt}
-            type="button"
-            className={on ? "btn btn-primary" : "tag tag-neutral"}
-            style={{
-              cursor: "pointer",
-              border: on ? undefined : 0,
-              fontFamily: "inherit",
-              fontSize: 13,
-              padding: "7px 14px",
-            }}
-            onClick={() => onToggle(opt)}
-            aria-pressed={on}
-          >
+      <div className="library-filter-chips">
+        {options.map((opt) => {
+          const on = selected.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              className={on ? "btn btn-primary" : "tag tag-neutral"}
+              style={{
+                cursor: "pointer",
+                border: on ? undefined : 0,
+                fontFamily: "inherit",
+                fontSize: 13,
+                padding: "7px 14px",
+              }}
+              onClick={() => onToggle(opt)}
+              aria-pressed={on}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      <select
+        className="input library-filter-select"
+        aria-label={label}
+        value={selected[0] ?? ""}
+        onChange={(e) => onSelectOne(e.target.value || null)}
+      >
+        <option value="">{allLabel}</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
             {opt}
-          </button>
-        );
-      })}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
