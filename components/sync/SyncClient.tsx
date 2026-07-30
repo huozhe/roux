@@ -7,7 +7,6 @@ import {
   relativeSyncAgo,
   resultTagClass,
 } from "@/components/sync/format";
-import { readSseStream } from "@/components/sync/sse";
 
 export type SyncRunRow = {
   id?: number | string;
@@ -90,16 +89,27 @@ function parseCounters(json: unknown): Counters {
     return { addedThisMonth: null, needTranscript: null, unverified: null };
   }
   const o = json as Record<string, unknown>;
-  const n = (k: string) =>
-    typeof o[k] === "number" && Number.isFinite(o[k] as number)
-      ? (o[k] as number)
-      : null;
+  const n = (...keys: string[]) => {
+    for (const k of keys) {
+      if (typeof o[k] === "number" && Number.isFinite(o[k] as number)) {
+        return o[k] as number;
+      }
+    }
+    return null;
+  };
   return {
-    addedThisMonth:
-      n("added_this_month") ?? n("addedThisMonth") ?? n("written_this_month"),
-    needTranscript:
-      n("need_transcript") ?? n("needTranscript") ?? n("no_transcript"),
-    unverified: n("unverified"),
+    addedThisMonth: n(
+      "addedThisMonth",
+      "added_this_month",
+      "written_this_month",
+    ),
+    needTranscript: n(
+      "needTranscriptCount",
+      "needTranscript",
+      "need_transcript",
+      "no_transcript",
+    ),
+    unverified: n("unverifiedCount", "unverified", "unverified_count"),
   };
 }
 
@@ -120,8 +130,6 @@ export function SyncClient() {
   const [loading, setLoading] = useState(true);
   const [needAuth, setNeedAuth] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncStage, setSyncStage] = useState("");
   const [captionSkips, setCaptionSkips] = useState<{
     no_captions: CaptionSkipItem[];
     auth_blocked: CaptionSkipItem[];
@@ -224,51 +232,6 @@ export function SyncClient() {
     void load();
   }, [load]);
 
-  async function runSync() {
-    if (syncing) return;
-    setSyncing(true);
-    setSyncStage("Starting…");
-    setError(null);
-
-    try {
-      const res = await fetch("/api/sync", { method: "POST" });
-      if (res.status === 401) {
-        setNeedAuth(true);
-        setSyncStage("");
-        setSyncing(false);
-        return;
-      }
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          code?: string;
-          hint?: string;
-        };
-        const msg =
-          data.code === "SYNC_LOCAL_ONLY"
-            ? `${data.error ?? "Cloud sync disabled."} (local: ${data.hint ?? "npm run sync"})`
-            : (data.error ?? `Sync failed (${res.status})`);
-        setError(msg);
-        setSyncStage("");
-        setSyncing(false);
-        return;
-      }
-
-      const ctype = res.headers.get("content-type") ?? "";
-      if (ctype.includes("text/event-stream") || res.body) {
-        for await (const stage of readSseStream(res.body)) {
-          if (stage.trim()) setSyncStage(stage.trim());
-        }
-      }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sync network error");
-    } finally {
-      setSyncing(false);
-      setSyncStage("");
-    }
-  }
-
   const selected = playlists.filter((p) => p.selected);
   const watchingTitle =
     selected.length === 0
@@ -299,7 +262,7 @@ export function SyncClient() {
         <div>
           <h1 style={{ fontSize: 34, margin: 0 }}>Sync</h1>
           <div className="text-muted" style={{ fontSize: "13.5px" }}>
-            Roux checks the playlist on a schedule and writes up anything new.
+            Sync runs on your computer with <code>npm run sync</code>.
           </div>
         </div>
         <div className="card elev-sm" style={{ padding: 22, gap: "17.6px" }}>
@@ -459,47 +422,10 @@ export function SyncClient() {
               {loading ? "…" : relativeSyncAgo(lastRunAt)}
             </div>
             <div className="text-muted" style={{ fontSize: "12.5px" }}>
-              next daily
+              local only · npm run sync
             </div>
           </div>
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ minHeight: 44, marginTop: 0 }}
-            disabled={syncing || loading}
-            onClick={() => void runSync()}
-          >
-            {syncing ? "Syncing…" : "Sync now"}
-          </button>
         </div>
-
-        {syncing ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "13.2px",
-              padding: "13.2px 17.6px",
-              borderRadius: 20,
-              background: "var(--color-bg)",
-            }}
-          >
-            <span
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 999,
-                border: "2.75px solid var(--color-accent-200)",
-                borderTopColor: "var(--color-accent)",
-                animation: "spin 0.8s linear infinite",
-                flex: "none",
-              }}
-              aria-hidden
-            />
-            <div style={{ fontSize: 14 }}>{syncStage || "Syncing…"}</div>
-          </div>
-        ) : null}
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8.8px" }}>
           <div
@@ -531,7 +457,7 @@ export function SyncClient() {
               {counterLabel(counters.needTranscript)}
             </div>
             <div className="text-muted" style={{ fontSize: 12 }}>
-              need a transcript
+              caption skips
             </div>
           </div>
           <div

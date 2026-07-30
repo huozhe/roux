@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveAppUserId } from "@/lib/recipes/auth";
 import { getSyncStatusSummary } from "@/lib/sync";
 
 /**
@@ -7,7 +8,7 @@ import { getSyncStatusSummary } from "@/lib/sync";
  */
 export async function GET() {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -18,6 +19,7 @@ export async function GET() {
       lastRun: null,
       unverifiedCount: 0,
       needTranscriptCount: 0,
+      addedThisMonth: 0,
       source: "no_db" as const,
     });
   }

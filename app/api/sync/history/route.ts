@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveAppUserId } from "@/lib/recipes/auth";
 import { listSyncHistory } from "@/lib/sync";
 
 /**
@@ -7,7 +8,7 @@ import { listSyncHistory } from "@/lib/sync";
  */
 export async function GET(req: Request) {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

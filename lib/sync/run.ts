@@ -638,6 +638,7 @@ export async function getSyncStatusSummary(userId: string): Promise<{
   lastRun: Awaited<ReturnType<typeof listSyncHistory>>[number] | null;
   unverifiedCount: number;
   needTranscriptCount: number;
+  addedThisMonth: number;
 }> {
   const db = getDb();
 
@@ -661,6 +662,22 @@ export async function getSyncStatusSummary(userId: string): Promise<{
         eq(recipes.userId, userId),
         eq(recipes.verified, false),
         isNull(recipes.archivedAt),
+        isNull(recipes.deletedAt),
+      ),
+    );
+
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+
+  const [addedMonth] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(recipes)
+    .where(
+      and(
+        eq(recipes.userId, userId),
+        isNull(recipes.deletedAt),
+        sql`${recipes.addedAt} >= ${monthStart}`,
       ),
     );
 
@@ -683,6 +700,7 @@ export async function getSyncStatusSummary(userId: string): Promise<{
     lastRun,
     unverifiedCount: unverified?.n ?? 0,
     needTranscriptCount,
+    addedThisMonth: addedMonth?.n ?? 0,
   };
 }
 
