@@ -3,19 +3,18 @@
 **Date**: 2026-07-30
 
 ## Current Objective
-Private YouTube cooking playlist → searchable recipe library. UI polish on library/share shipped; next **T9**.
+Private YouTube cooking playlist → searchable recipe library. Sync page cleaned for local-only; next **T9 polish**.
 
 ## Next Concrete Step
-T9 from `docs/plans/v1-implementation.md` (broader mobile pass, empty/error/quota).
+T9 from `docs/plans/v1-implementation.md` (mobile/empty/error/quota pass).
 
 ## Key Context to Load
-- Prod: https://roux-green.vercel.app · head `221a2e7`
-- Library: mobile cuisine/main `<select>`; count is `N recipes` (no 500)
-- Dialogs: `.dialog-backdrop` z-index 1000, safe mobile sizing (share vs sticky ingredients)
-- Local sync, caption_skips, syncMarkVerified, categories add/remove
+- Prod: https://roux-green.vercel.app · head `41f2b3b`
+- Sync UI: no cloud Sync now; counters from `/api/sync/status` (addedThisMonth, unverifiedCount, caption skips)
+- Local: `npm run sync -- --max=N` + optional `YOUTUBE_COOKIES`
+- Plan: `docs/plans/v1-implementation.md`
 
 ## Verification
 ```bash
-# Mobile library: dropdowns for cuisine/main
-# Recipe share: modal above ingredients, full width on phone
+# Sync page: stats show numbers; no Sync now / no "next daily"
 ```
