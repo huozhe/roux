@@ -19,7 +19,7 @@
 - Google sign-in only; email/password button visible but disabled.
 - Notes + verified/confidence never on public share page.
 - Never overwrite `verified` recipes on re-extract.
-- Dead videos: keep recipe, disable links, cache thumbnails at sync.
+- Dead videos: keep recipe, disable links; show unavailable tag (no thumbnail cache).
 - Mobile first-class: collapsed video by default, cook controls 64px bottom, hit targets ≥44px.
 - Out of scope: email auth, shopping lists, serving scaling, cooked log, collection shares, custom domain, per-playlist library filter.
 - Repo starts greenfield (only `prototype/` today).

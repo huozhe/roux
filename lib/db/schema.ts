@@ -66,7 +66,6 @@ export const recipes = roux.table(
     channelTitle: text("channel_title").notNull(),
     channelId: text("channel_id"),
     thumbnailUrl: text("thumbnail_url"),
-    thumbnailBlob: text("thumbnail_blob"),
     cuisine: text("cuisine"),
     mainIngredient: text("main_ingredient"),
     cookMinutes: integer("cook_minutes"),
