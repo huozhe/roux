@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Refuse direct pushes to main. PRs only.
+#
+# Why: main auto-deploys to production on Vercel, and two accidental pushes
+# (one an incomplete recipe page) reached it before being reverted. GitHub
+# branch protection would enforce this server-side, but it requires Pro for
+# private repos — so this is the client-side stand-in.
+#
+# This stops accidents, not adversaries: `--no-verify` bypasses it and it only
+# runs in clones that set core.hooksPath. That is the intended scope.
+#
+# Enable (once per clone):  git config core.hooksPath .githooks
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "" >&2
+      echo "  pre-push: direct push to main is blocked." >&2
+      echo "" >&2
+      echo "  main auto-deploys to production. Open a PR instead:" >&2
+      echo "    git checkout -b <branch> && git push -u origin <branch>" >&2
+      echo "    gh pr create" >&2
+      echo "" >&2
+      echo "  Deliberate override (e.g. reverting a bad deploy):" >&2
+      echo "    git push --no-verify" >&2
+      echo "" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
