@@ -50,7 +50,7 @@ function SingleScroll({
   onNotes,
   notesStatus,
   showTimestamps,
-  showNotes = true,
+  showNotes = false,
 }: {
   recipe: Recipe;
   playable: boolean;
@@ -280,7 +280,7 @@ function SplitLayout({
   onNotes,
   notesStatus,
   showTimestamps,
-  showNotes = true,
+  showNotes = false,
 }: {
   recipe: Recipe;
   playable: boolean;
