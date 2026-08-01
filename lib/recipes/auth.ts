@@ -29,8 +29,29 @@ export async function resolveAppUserId(
   }
 }
 
+/**
+ * Integration tests inject a fixed app user id (see setTestDb).
+ * `undefined` = use real session; `null` = force 401.
+ */
+let _testUserId: string | null | undefined;
+
+export function setTestUserId(userId: string | null | undefined): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setTestUserId is not available in production");
+  }
+  _testUserId = userId;
+}
+
 /** Session app user id or 401 response. */
 export async function requireUserId(): Promise<string | NextResponse> {
+  // Test bypass only outside production so the branch can DCE out of prod builds.
+  if (process.env.NODE_ENV !== "production" && _testUserId !== undefined) {
+    if (!_testUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return _testUserId;
+  }
+
   const session = await auth().catch(() => null);
   const resolved = await resolveAppUserId(session?.user?.id);
   if (!resolved) {

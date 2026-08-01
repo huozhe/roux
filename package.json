@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test 'lib/**/*.test.ts'",
+    "test": "tsx --test 'lib/**/*.test.ts' 'app/**/*.test.ts'",
     "db:push": "node --import tsx scripts/db-with-env.ts drizzle-kit push",
     "db:generate": "node --import tsx scripts/db-with-env.ts drizzle-kit generate",
     "db:studio": "node --import tsx scripts/db-with-env.ts drizzle-kit studio",
