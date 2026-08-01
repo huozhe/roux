@@ -71,7 +71,7 @@ export function ExportButtons() {
 
   return (
     <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
-      <h4 style={{ margin: 0 }}>Export your library</h4>
+      <h2 style={{ margin: 0, fontSize: 20 }}>Export your library</h2>
       <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
         Everything you&apos;ve written up, including your notes — yours to keep,
         no lock-in.

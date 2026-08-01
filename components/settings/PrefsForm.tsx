@@ -68,7 +68,7 @@ export function PrefsForm({
 
   return (
     <div className="card elev-sm" style={{ padding: 22, gap: "17.6px" }}>
-      <h4 style={{ margin: 0 }}>Reading preferences</h4>
+      <h2 style={{ margin: 0, fontSize: 20 }}>Reading preferences</h2>
 
       <div className="field">
         <label>Recipe page layout</label>

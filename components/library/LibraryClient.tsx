@@ -210,7 +210,7 @@ export function LibraryClient({
               left: 14,
               top: "50%",
               transform: "translateY(-50%)",
-              color: "var(--color-neutral-600)",
+              color: "var(--color-neutral-700)",
               display: "grid",
               pointerEvents: "none",
             }}
@@ -246,7 +246,7 @@ export function LibraryClient({
       {sharedWithMe.length > 0 && view === "library" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h4 style={{ margin: 0 }}>Shared with me</h4>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Shared with me</h2>
             <div className="tag tag-neutral">
               {sharedWithMe.length} recipe{sharedWithMe.length === 1 ? "" : "s"}
             </div>
@@ -295,7 +295,7 @@ export function LibraryClient({
       {showNewShelf && newShelfRecipes.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h4 style={{ margin: 0 }}>Newly added</h4>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Newly added</h2>
             <div className="tag tag-accent">
               {newShelfRecipes.length} from the last sync
             </div>
@@ -423,7 +423,7 @@ export function LibraryClient({
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--color-neutral-600)",
+              color: "var(--color-neutral-700)",
               width: 74,
             }}
           >
@@ -483,7 +483,7 @@ export function LibraryClient({
                   fontSize: 11,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: "var(--color-neutral-600)",
+                  color: "var(--color-neutral-700)",
                   width: 74,
                 }}
               >
@@ -568,7 +568,7 @@ export function LibraryClient({
               gap: 4,
             }}
           >
-            <h4 style={{ margin: 0 }}>Archive</h4>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Archive</h2>
             <p
               style={{
                 margin: 0,
@@ -596,7 +596,7 @@ export function LibraryClient({
                 gap: 4,
               }}
             >
-              <h4 style={{ margin: 0 }}>Nothing archived</h4>
+              <h2 style={{ margin: 0, fontSize: 20 }}>Nothing archived</h2>
               <p className="text-muted" style={{ margin: 0, fontSize: 14 }}>
                 Remove a recipe from its page and it lands here first.
               </p>
@@ -681,7 +681,7 @@ export function LibraryClient({
             gap: 8.8,
           }}
         >
-          <h4 style={{ margin: 0 }}>Nothing matches that</h4>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Nothing matches that</h2>
           <p className="text-muted" style={{ margin: 0, fontSize: 14 }}>
             Try a different cuisine, or search the author&apos;s channel name.
           </p>
@@ -727,7 +727,7 @@ function FilterField({
           fontSize: 11,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "var(--color-neutral-600)",
+          color: "var(--color-neutral-700)",
           width: 74,
           flex: "none",
         }}

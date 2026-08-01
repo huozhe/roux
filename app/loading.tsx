@@ -5,7 +5,7 @@ export default function Loading() {
         minHeight: "40vh",
         display: "grid",
         placeItems: "center",
-        color: "var(--color-neutral-600)",
+        color: "var(--color-neutral-700)",
         fontSize: 14,
         fontFamily: "var(--font-body)",
       }}
