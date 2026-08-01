@@ -1,116 +1,89 @@
 # Claude Session State — Roux
 
-**Date:** 2026-07-31
-**Role in this repo:** external reviewer. Claude did **not** build this app (Grok did) and does **not** write app code. Claude reviews; Grok implements. See §10.5 rule 10 of the review doc.
+**Date:** 2026-08-01
+**Role in this repo:** external reviewer. Claude did **not** build this app (Grok did) and does **not** write app code. Claude reviews; Grok implements.
 
 ---
 
-## Current objective
+## Current status: review round 1 COMPLETE
 
-Run the review→consensus→fix cycle defined in `docs/reviews/2026-07-31-external-code-review.md` §10, against commit `45027b0`.
+The full review→consensus→fix cycle defined in `docs/reviews/2026-07-31-external-code-review.md` §10 ran to completion against `45027b0`.
+
+| | |
+|---|---|
+| PR #1 — review + debate | **MERGED** · 26 findings, 4 rounds, 0 deadlocks |
+| PR #2 — 10 AGREED fixes | **MERGED** · 10/10 `VERIFIED` |
+| Issue #3 — 10 DEFERRED | **OPEN** — the live backlog |
+| `main` | 69 tests pass · tsc clean · lint clean · prod verified healthy |
+
+Both branches deleted. Per-finding commit history (`[SEC-1]`, `[ARCH-1]`, …) preserved on `main` — `git log --grep='\[ARCH-1\]'` is the audit trail.
+
+**Outcome:** 10 `AGREED` (shipped) · 10 `DEFERRED` (issue #3) · 6 `WONTFIX` (closed decisions).
 
 ## Next concrete step
 
-**Round 2 done (2026-08-01).** PR #1: 26 findings settled — 10 `AGREED` · 10 `DEFERRED` · 6 `WONTFIX` · 0 `CONTESTED`.
+**Run `npm run sync` locally.** Highest-value single action. LLM-3 telemetry shipped but has recorded nothing, so `sync_runs.detail.extracts` is empty. One run unblocks two deferred findings:
 
-Waiting on Grok to (1) declare **ARCH-1 scope: (a) mapper-only or (b) mapper + single list function**, and (2) open Fix PR #2 with the 10 `AGREED` items. Then review per §10.7.
+- **LLM-1** — `attempts > 1` across extracts = the retry-fire rate. The entire structured-outputs / Sonnet-5 decision is gated on this number. **"Stay on `claude-sonnet-4-6`" is a legitimate outcome** — do not treat migration as the default.
+- **LLM-2** — `cache_read_input_tokens > 0` on videos 2..N confirms prompt caching actually engages. Currently theory backed by a token count, not observation.
 
-```bash
-gh pr view 1 --comments          # debate thread
-gh pr list                       # Fix PR appeared?
-```
-
-### Round 2 outcome — corrections to this file's earlier calibration
-
-- **LLM-2: reviewer was WRONG, finding inverted.** Measured independently: `withSys 1071 − noSys 8 = 1063 tokens` > 1024 minimum. `chars/4` assumed 4.0 chars/token; actual **3.64**. Caching *is* viable on Sonnet 4.6. Now `AGREED` with a guard for the 39-token (3.8%) margin, which fails silently on any prompt trim. **Never re-assert the old conclusion.**
-- **CQ-1: reviewer miscounted.** 14 `useState`, not 17 — `grep -c` counted mentions, not calls. Argument stands, number was wrong.
-- **CQ-6: reviewer overstated severity.** `RecipeCard` already shows a "Video unavailable" tag and YouTube serves a gray placeholder, not a 404. Near-pure dead-code cleanup.
-- **Predicted concessions all landed:** UX-3, SEC-4, SEC-5, UX-4, ARCH-4 → `WONTFIX`. The calibration below was accurate; trust it.
-- **UX-2: Grok had context the code didn't show** — the mount fetch was defensive after a *real observed* staleness bug, not speculative. Current design justified.
-- **§8 Q1 answered:** fixture fallback IS load-bearing → ARCH-1 fix is "unify mappers, keep adapter," not "delete the module." Reviewer withdrew the stronger version.
-
-## Key context to load
-
-- **The review + protocol:** `docs/reviews/2026-07-31-external-code-review.md` (711 lines, 26 findings, protocol in §10)
-- **Ledger:** the Review PR *description* is authoritative. `docs/reviews/.pr-body.md` is a one-time seed — do not read it for current status.
-- **Grok's own state file:** `.grok/STATE.md`
-- `gh` is authenticated as `huozhe`, scope `repo`. No Claude GitHub App installed — deliberately (see below).
+Then: issue #3, in its stated order. One item needs the owner, not the reviewer: `TEST-1` item 1 infra (pglite vs. Neon branch) — infra cost is optional for a private single-user app.
 
 ---
 
-## Why this file exists
+## ⛔ Do not re-litigate
 
-The review doc and PR thread capture *what* was found and *what* was decided. They do not capture Claude's **confidence calibration** — which findings it would concede fastest, which it would defend hardest, and what it never verified. That is the part a fresh session would lose and could not reconstruct from the PR.
+A future session re-flagging any of these will be wrong and will waste Grok's time. All were settled with evidence in PR #1.
 
-Everything below is reviewer-private reasoning. **It is not in the review doc and must not be pasted into the PR** — publishing "here's where I'm weakest" would distort the debate rather than inform it. Use it to decide how hard to push, not as an argument.
+### Reviewer was wrong — corrected on the record
 
----
+1. **`claude-sonnet-4-6` is NOT deprecated.** Active model. Never resurrect "you're on an old model" as a criticism.
+2. **Prompt caching WORKS here.** `SYSTEM_PROMPT` = **1063 tokens** (measured `countTokens`: withSys 1071 − noSys 8), above the 1024 Sonnet minimum. An early `chars/4` estimate said 968 and was wrong — actual ratio is **3.64 chars/token**, not 4.0. `cache_control` shipped in `a6c7fe1`.
+3. **`RecipeDetail.tsx` has 14 `useState`, not 17.** The 17 came from `grep -c useState` counting mentions, not calls.
+4. **The SSR/API *search* divergence is NOT user-visible.** `GET /api/recipes` has exactly one caller — `components/settings/ExportButtons.tsx` — and it passes only `view=`, never `q`/`cuisine`/`main`/`sort`. The search box feeds `filterAndSortRecipes` client-side. Only the *mapper* half of ARCH-1 was reachable (via export), and that shipped.
 
-## Confidence calibration
+### Settled `WONTFIX` — decisions, not omissions
 
-### Defend hardest — evidence is direct and checkable
+`SEC-4` no rate limiting (trusted private user) · `SEC-5` 4-hex share slugs (readability chosen deliberately) · `ARCH-4` prefs lost-update (explicit risk acceptance) · `CQ-5` raw `<img>` (correct at ~160 recipes) · `UX-3` full library to client (ceiling ~200–400; pagination would be worse) · `UX-4` `alt=""` (avoids double announcement).
 
-| ID | Why it's solid |
-|---|---|
-| **ARCH-1** | Not theoretical. `map.ts:33` (`row.ingredients ?? []`) vs `db-recipes.ts:69` (`asIngredients(row.ingredients)`) is a live behavioral divergence between the SSR and API read paths. Anyone can diff the two functions. This is the strongest finding in the document. |
-| **SEC-2** | Purely factual: `app/api/sync/route.ts:16` uses `session?.user?.id`; every sibling route calls `resolveAppUserId`. No interpretation involved. |
-| **CQ-3** | Verified by absence — no `@import "tailwindcss"`, no `@tailwind`, zero utility classes, yet the PostCSS plugin is loaded. Not arguable. |
-| **CQ-6** | `thumbnail_blob` appears exactly twice repo-wide: the schema declaration and a `null` in a test fixture. Traceable to an unimplemented Global Constraint in the plan. |
+### Where Grok had context the code did not show
 
-### Expect to concede — Grok probably has the better argument
-
-| ID | Anticipated defense (likely correct) |
-|---|---|
-| **UX-3** | "It's my personal cookbook, ~100 recipes, client-side filtering is instant and correct at this scale." That is a *better* engineering answer than pagination. Concede quickly. |
-| **SEC-4** | "Private single-user app, authenticated routes, one user's own quota." Valid. Tagged JUDGMENT for exactly this reason. |
-| **SEC-5** | Slug readability was almost certainly deliberate — `mapo-tofu-a3f9` is a nicer share link than 8 random hex. Concede if stated as intent. |
-| **UX-4** | `alt=""` on a card whose title is adjacent is arguably *correct* a11y — avoids double announcement. Concede if deliberate. |
-| **TEST-2** | Downstream of the TEST-1 infra decision; not independently actionable. |
-
-### Genuinely uncertain — do not push without new evidence
-
-- **LLM-2 (prompt caching).** The ~968-token figure is `chars/4`, **not measured**. If real `count_tokens` output exceeds 1024, the finding inverts and caching becomes worth doing immediately on Sonnet 4.6. Rule 2 of §10.5 exists to stop either side acting before this is measured. Do not defend the current conclusion; defend the *requirement to measure*.
-- **UX-1 (a11y).** The claim is "not audited," not "N violations." Counting `aria-*` and `onClick` occurrences is a proxy, not an audit. If Grok runs axe and reports a low number, accept it.
-- **ARCH-4 (prefs lost update).** Real race, but the window is small and impact is a lost custom chip on a single-user app. Do not oversell.
-
-### Where Grok may have context Claude lacks
-
-- **`lib/data/recipes.ts` fixture fallback.** If rendering without `DATABASE_URL` is a supported mode, ARCH-1's fix changes from "delete `db-recipes.ts`" to "unify the mappers, keep the adapter." §8 Q1 asks this directly. **Read that answer before pressing ARCH-1.**
-- **CQ-2 (inline styles).** Escalated to DEFECT only because `docs/plans/v1-implementation.md` names it as a Global Constraint. If Grok says the constraint was consciously dropped for a stated reason, it downgrades to JUDGMENT and a migration may not be worth proposing.
-- **UX-2 (`useLivePrefs`).** The docstring cites RSC staleness. If that was *observed* with a repro, the cheaper fix (`revalidatePath` / `router.refresh()`) may not actually work and the current design is justified.
+- **UX-2** — `useLivePrefs`'s mount fetch was defensive after a *real observed* staleness bug (Settings saved, SSR props stale until hard refresh), not speculative hardening. Current design justified; the cheaper `revalidatePath`/`router.refresh()` fix is an untested hypothesis.
+- **CQ-2** — the design-token constraint eroded under ship pressure, was not consciously rescinded. Go-forward rule agreed: new UI prefers `organic.css` tokens. Recorded `DEFERRED`, not `WONTFIX`.
+- **§8 Q1** — the fixture fallback in `lib/data/recipes.ts` is load-bearing for the no-DB path, which is why ARCH-1 became "unify mappers, keep adapter."
 
 ---
 
-## Self-corrections already made — do not re-introduce
+## Measured facts worth not re-deriving
 
-1. **`claude-sonnet-4-6` is NOT deprecated or invalid.** It is an active model. An earlier draft implied otherwise; corrected on the record in LLM-1. Do not resurrect "you're on an old model" as a criticism — the real argument is structured outputs, which requires Sonnet 5+.
-2. **Prompt caching is probably NOT a win here.** Initial instinct was "add `cache_control`, save 90%." Wrong: the system prompt sits just under the 1024-token minimum, so it would silently no-op. See uncertainty note above.
+- `SYSTEM_PROMPT`: **3870 chars = 1063 tokens** on `claude-sonnet-4-6` (3.64 chars/token).
+- Prompt-cache minimum 1024 tok = **3728 chars**. Guard in `lib/extract/prompt-cache.test.ts` set to **3800** (~1047 tok, ~2% margin) — *not* 3728, because trimming prose leaves the denser JSON-schema block and pushes the ratio up. A 3700 floor was rejected in review: it measured 1021 tok, i.e. it would have passed while caching silently no-op'd.
+- Caching saves ~3,561 tok/run at `maxNew=5` ≈ **$0.011/run**. Real but small; the transcript dominates input.
+- Recipe library: **~160** today, owner's ceiling **~200–400**.
 
-Both corrections came from loading Anthropic's current API reference rather than relying on recall. **Do the same before making any further model/pricing/caching claim.**
+## ⚠️ Carried into ARCH-2 (issue #3)
 
----
+The SQL filter path in `queries.listRecipes` and the `recipes_search_gin` index from `0001_search.sql` **have never executed against real data** — no caller reaches them. When ARCH-2 promotes that path to the only path, it runs in production for the first time. That is "delete the duplicate **and validate the survivor**," not a mechanical swap. Ship it with tests.
 
 ## Not verified — flag if it becomes load-bearing
 
-- Nothing was run against the live Neon DB or a real sync. Findings are static-analysis + test/lint/build only.
-- `npm test` (59 pass), `npx tsc --noEmit` (clean), `npm run lint` (clean) at `45027b0`.
-- No browser session; UI findings are read from source, not observed. UX-1 especially.
-- Vercel deployment config beyond `vercel.json` + `.github/workflows/ci.yml` not inspected.
+Review was static analysis + test/lint/build + a live prod smoke check (`/`, `/login` 200; unauth `/api/recipes` → JSON 401). No sync was run against live Neon, no browser session, no a11y tooling. `UX-1` explicitly awaits an axe run — **reviewer withdraws that finding if axe comes back clean.**
 
 ---
 
-## Process reminders
+## Process notes for a future cycle
 
-- **Conceding is a success.** §10.5 rule 4. The goal is a correct ledger, not a high fix count. A reviewer who never concedes is miscalibrated.
-- **Deadlock rule is automatic:** 2 failed exchanges on one finding → `BLOCKED-OWNER`. Do not argue a third time.
-- **Claude never pushes app code.** Review only. The Fix PR is Grok's.
-- **Do not regress §0** of the review doc — those items were named as good so they survive the process.
-- **No GitHub App installed, deliberately.** The Actions runner would be a cold Claude with none of this calibration. Revisit at Round 5 (Fix PR verification), where the ledger fully specifies the job and cold context is fine.
+- **Protocol lives in §10** of the review doc — status machine, deadlock rule (2 failed exchanges → `BLOCKED-OWNER`), evidence rule, `gh` commands. It worked; reuse it.
+- **The load-bearing rule was §10.5 #1 (evidence or it didn't happen).** Every correction in both directions came from someone running a command instead of asserting. The status fields were bookkeeping.
+- **Grok corrected Claude 3×, Claude corrected Grok 1×.** All four stood up. If a future cycle has Claude never conceding, Claude is miscalibrated — see §10.5 #4.
+- **Known gap: both agents act as GitHub user `huozhe`**, so GitHub blocks Approve / Request-changes on own PRs. Verdicts had to land as Comment reviews labeled as such. A second identity for one agent would restore real review semantics.
+- **No Claude GitHub App installed, deliberately** — an Actions runner is a cold Claude with none of this context. Fine for mechanical Fix-PR verification; bad for the debate phase.
+- **The owner is the scheduler.** Neither agent polls or receives notifications; rounds advance only when the owner invokes one of them.
 
 ## Verification
 
 ```bash
-gh pr view <N> --comments        # Grok responded?
-gh pr view <N> --json body       # ledger current?
+gh issue view 3                  # deferred backlog
+git log --grep='\[ARCH-1\]'      # per-finding audit trail
 npm test && npm run lint && npm run build
 ```
