@@ -9,6 +9,8 @@ import {
   isBaseMain,
   MAINS,
 } from "@/lib/categories";
+import { publishPrefs } from "@/lib/prefs/client";
+import type { UserPrefs } from "@/lib/types";
 
 type CategoriesEditorProps = {
   initialCuisines?: string[];
@@ -57,6 +59,8 @@ export function CategoriesEditor({
         setStatus(body.error ?? "Couldn’t save");
         return;
       }
+      const body = (await res.json().catch(() => ({}))) as { prefs?: UserPrefs };
+      if (body.prefs) publishPrefs(body.prefs);
       setStatus("Saved");
       router.refresh();
     } catch {

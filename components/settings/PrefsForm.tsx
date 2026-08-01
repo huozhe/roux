@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { publishPrefs } from "@/lib/prefs/client";
 import { DEFAULT_PREFS } from "@/lib/types";
 import type { RecipeLayout, UserPrefs } from "@/lib/types";
 
@@ -50,8 +51,15 @@ export function PrefsForm({
         setStatus(body.error ?? "Couldn’t save");
         return;
       }
+      const body = (await res.json().catch(() => ({}))) as { prefs?: UserPrefs };
+      if (body.prefs) {
+        publishPrefs(body.prefs);
+        setPrefs(body.prefs);
+      } else {
+        publishPrefs(next);
+      }
       setStatus("Saved");
-      // Refresh RSC cache so library/recipe pages pick up new prefs.
+      // Soft-refresh current route; cross-route consumers use publishPrefs.
       router.refresh();
     } catch {
       setStatus("Couldn’t save");
