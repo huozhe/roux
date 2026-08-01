@@ -25,7 +25,8 @@ Mobile `/login` local: **100**.
 
 ## Fixes
 
-- Text/link/primary fills use **accent-700** / **neutral-700** for AA on page bg; decorative accent hex kept for focus rings / radio fills.
+- Text/link/primary fills use **accent-700** / **neutral-700** for AA on page bg *and* surface.
+- **Focus rings** (`:focus-visible`, input border, radio/seg focus) also use **accent-700** — SC 1.4.11 non-text UI needs 3:1; brand accent `#c67139` was only 2.69:1 on `--color-surface` (Lighthouse cannot catch this). Soft fills (radio checked, selection wash) keep brand accent.
 - Login wraps content in `<main>`.
 - Section headings `h4` → `h2` (visual size preserved via `fontSize: 20` where needed).
 
