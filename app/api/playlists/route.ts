@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  RATE_LIMITS,
+  rateLimitResponse,
+  takeRateLimit,
+} from "@/lib/rate-limit";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   applySelection,
@@ -37,6 +42,14 @@ export async function GET(req: Request) {
 
   try {
     if (refresh) {
+      // SEC-4: YouTube playlists.list quota — per-user refresh cap.
+      const rl = takeRateLimit(
+        `playlists-refresh:${userId}`,
+        RATE_LIMITS.playlistsRefresh.limit,
+        RATE_LIMITS.playlistsRefresh.windowMs,
+      );
+      if (!rl.ok) return rateLimitResponse(rl);
+
       const playlists = await refreshUserPlaylists(userId);
       return NextResponse.json({
         playlists,

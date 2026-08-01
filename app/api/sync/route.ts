@@ -1,4 +1,9 @@
 import { auth } from "@/lib/auth";
+import {
+  RATE_LIMITS,
+  rateLimitResponse,
+  takeRateLimit,
+} from "@/lib/rate-limit";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import { runSyncForUser, type SyncProgress } from "@/lib/sync";
 
@@ -21,6 +26,14 @@ export async function POST() {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // SEC-4: shared ANTHROPIC_API_KEY — cap cloud sync per user.
+  const rl = takeRateLimit(
+    `sync:${userId}`,
+    RATE_LIMITS.sync.limit,
+    RATE_LIMITS.sync.windowMs,
+  );
+  if (!rl.ok) return rateLimitResponse(rl);
 
   if (!process.env.DATABASE_URL) {
     return new Response(JSON.stringify({ error: "DATABASE_URL not set" }), {
