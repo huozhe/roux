@@ -292,6 +292,10 @@ export function LibraryClient({
                     <img
                       src={thumb}
                       alt=""
+                      width={68}
+                      height={68}
+                      loading="lazy"
+                      decoding="async"
                       style={{
                         width: "100%",
                         height: "100%",

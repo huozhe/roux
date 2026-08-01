@@ -33,7 +33,8 @@ export function AppNav() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <div
+    <nav
+      aria-label="Main"
       style={{
         position: "sticky",
         top: 0,
@@ -105,6 +106,6 @@ export function AppNav() {
           JL
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

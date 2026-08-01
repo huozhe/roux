@@ -63,6 +63,10 @@ export function RecipeCard({ recipe: r, sort }: Props) {
           <img
             src={thumb}
             alt=""
+            width={480}
+            height={360}
+            loading="lazy"
+            decoding="async"
             style={{
               width: "100%",
               height: "100%",

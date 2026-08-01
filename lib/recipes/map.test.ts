@@ -19,7 +19,6 @@ function sampleRow(over: Partial<RecipeRow> = {}): RecipeRow {
     channelTitle: "Wok Discipline",
     channelId: "ch1",
     thumbnailUrl: "https://img.example/t.jpg",
-    thumbnailBlob: null,
     cuisine: "Sichuan",
     mainIngredient: "Tofu",
     cookMinutes: 25,

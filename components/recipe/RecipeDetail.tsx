@@ -16,6 +16,7 @@ import {
 import { useLivePrefs } from "@/lib/prefs/client";
 import type { Ingredient, Recipe, Step, UserPrefs } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
+import { useDialogA11y } from "@/lib/ui/useDialogA11y";
 
 type Draft = {
   title: string;
@@ -83,6 +84,11 @@ export function RecipeDetail({
   const [error, setError] = useState<string | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesBaseline = useRef(recipe.notes ?? "");
+
+  const closeShare = useCallback(() => setShareOpen(false), []);
+  const closeConfirm = useCallback(() => setConfirming(false), []);
+  const shareDialogRef = useDialogA11y(shareOpen, closeShare);
+  const confirmDialogRef = useDialogA11y(confirming, closeConfirm);
 
   const gone = recipe.video_status === "gone";
   const playable = !gone;
@@ -506,12 +512,14 @@ export function RecipeDetail({
       )}
 
       {shareOpen && (
-        <div className="dialog-backdrop" role="presentation" onClick={() => setShareOpen(false)}>
+        <div className="dialog-backdrop" role="presentation" onClick={closeShare}>
           <div
+            ref={shareDialogRef}
             className="dialog"
             role="dialog"
             aria-modal="true"
             aria-labelledby="share-dialog-title"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dialog-title" id="share-dialog-title">
@@ -592,7 +600,7 @@ export function RecipeDetail({
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setShareOpen(false)}
+                onClick={closeShare}
               >
                 Done
               </button>
@@ -602,14 +610,19 @@ export function RecipeDetail({
       )}
 
       {confirming && (
-        <div className="dialog-backdrop" role="presentation" onClick={() => setConfirming(false)}>
+        <div className="dialog-backdrop" role="presentation" onClick={closeConfirm}>
           <div
+            ref={confirmDialogRef}
             className="dialog"
             role="dialog"
-            aria-modal
+            aria-modal="true"
+            aria-labelledby="remove-dialog-title"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="dialog-title">Remove “{recipe.title}”?</div>
+            <div className="dialog-title" id="remove-dialog-title">
+              Remove “{recipe.title}”?
+            </div>
             <div className="dialog-body">
               Archiving keeps the write-up and your notes for 30 days and stops
               the next sync from re-adding it. Deleting now is immediate and
@@ -620,7 +633,7 @@ export function RecipeDetail({
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => setConfirming(false)}
+                onClick={closeConfirm}
                 disabled={busy}
                 style={{ fontFamily: "var(--font-body)", fontSize: 13 }}
               >

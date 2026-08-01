@@ -15,7 +15,7 @@ export default function AppLayout({
       }}
     >
       <AppNav />
-      <div style={{ flex: 1 }}>{children}</div>
+      <main style={{ flex: 1 }}>{children}</main>
     </div>
   );
 }

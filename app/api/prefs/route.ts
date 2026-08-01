@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { isUnauthorized, requireUserId } from "@/lib/recipes/auth";
 import { getUserPrefs, updateUserPrefs } from "@/lib/recipes/queries";
@@ -99,6 +100,10 @@ export async function PUT(req: Request) {
 
   try {
     const prefs = await updateUserPrefs(userId, patch);
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/recipes", "layout");
+    revalidatePath("/sync");
     return NextResponse.json({ prefs });
   } catch (err) {
     return NextResponse.json(

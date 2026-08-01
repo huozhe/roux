@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { makeShareSlug } from "@/lib/format";
+import { useDialogA11y } from "@/lib/ui/useDialogA11y";
 
 type SharePanelProps = {
   open: boolean;
@@ -27,6 +28,8 @@ export function SharePanel({
   onPreview,
 }: SharePanelProps) {
   const [copied, setCopied] = useState<"link" | "text" | "">("");
+  const onCloseStable = useCallback(() => onClose(), [onClose]);
+  const panelRef = useDialogA11y(open, onCloseStable);
   if (!open) return null;
 
   const resolved = slug || buildStubSlug(title);
@@ -45,13 +48,15 @@ export function SharePanel({
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation" onClick={onClose}>
+    <div className="dialog-backdrop" role="presentation" onClick={onCloseStable}>
       <div
+        ref={panelRef}
         className="dialog"
         style={{ width: "min(480px, 100%)" }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-panel-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-title" id="share-panel-title">
@@ -137,7 +142,7 @@ export function SharePanel({
           >
             Kill this link
           </button>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onCloseStable}>
             Done
           </button>
         </div>
