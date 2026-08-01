@@ -1,13 +1,13 @@
 # Local ASR for caption-less videos (whisper.cpp)
 
-**Status:** **REVISED** — Claude deltas folded; @owner rulings in §8 · awaiting final @claude-reviewer ack  
+**Status:** **ACCEPTED** (2026-08-01) — implementation may proceed on §7  
 **Date:** 2026-08-01  
 **Author:** @grok-builder  
 **Reviewer:** @claude-reviewer · product calls: @owner  
 
-Related: `lib/youtube/transcript.ts`, `lib/sync/caption-skips.ts`, `lib/sync/run.ts`, extract path (`CaptionCue[]` → Claude).
+Related: `lib/youtube/transcript.ts`, `lib/youtube/videos.ts`, `lib/sync/caption-skips.ts`, `lib/sync/run.ts`, extract path (`CaptionCue[]` → Claude).
 
-**Review history:** draft PR #21 · @claude-reviewer sound + D1/D2 blocking deltas · @owner answered Q1/Q2/D4 and related product calls (2026-08-01).
+**Review history:** PR #21 · Claude D1/D2 · owner product · re-review **ACCEPTED** + D12 duration plumbing · owner: unknown duration still attempts ASR; CJK miss OK with override.
 
 ---
 
@@ -192,9 +192,9 @@ Default model id for cache identity: whatever CLI/`ROUX_ASR_MODEL` selects (defa
 | `auth_blocked` / captcha | **No** |
 | `unavailable` | No |
 | `empty_body` | **No** in v1 |
-| `no_captions` + ASR enabled + duration ≤ max | **Yes** |
+| `no_captions` + ASR enabled + (duration ≤ 45 min **or duration unknown**) | **Yes** |
 | Already in `caption_skips` as **`no_captions`** + ASR enabled | **Yes** (backlog — see §4.7) |
-| `no_captions` + duration **> max** | No; record `asr_too_long` (do not spin forever) |
+| `no_captions` + duration **known and > 45 min** | No; record `asr_too_long` |
 
 **Enablement — @owner ruling:** **opt-in only**
 
@@ -202,7 +202,13 @@ Default model id for cache identity: whatever CLI/`ROUX_ASR_MODEL` selects (defa
 - **Off by default** (even if binaries exist)  
 - When off, behavior identical to today  
 
-**Max duration — @owner ruling:** **45 minutes**. Source duration from playlist/video metadata when available; if unknown, attempt ASR (don’t block the whole backlog on missing duration).
+**Max duration — @owner ruling:** **45 minutes** when duration is **known**.
+
+**Duration plumbing required (Claude D12):** today `getVideosMeta` requests `part=snippet,status` only — **`contentDetails.duration` is not fetched**, and `VideoMeta` has no duration field. Without this, `durationKnown` is always false and the 45‑minute cap is **dead code** (a 3‑hour video would still download + Whisper).
+
+**Impl (quota-free):** add `contentDetails` to `videos.list` `part` in `lib/youtube/videos.ts` (still **1 unit** per call regardless of parts); parse ISO-8601 (`PT12M34S`) onto `VideoMeta`; use it in the §4.7 guard. Meta is already loaded for candidates before transcript/ASR.
+
+**If duration unknown** (API miss / parse fail) — **@owner:** **still attempt ASR** (do not block backlog). Cap applies only when duration is known and **> 45 min**.
 
 ### 4.7 Sync integration (`lib/sync/run.ts`) — **Claude D1 (critical)**
 
@@ -315,7 +321,8 @@ Simplest invariant:
 | yt-dlp missing / fails | Skip; `asr_download_failed`; leave `no_captions` skip |
 | whisper / model missing | **Fail fast** at sync start if ASR enabled |
 | Empty ASR text | Skip; `asr_empty` |
-| Duration > 45 min | Skip; `asr_too_long` |
+| Duration known and > 45 min | Skip; `asr_too_long` |
+| Duration **unknown** | **Attempt ASR** (@owner) |
 | OOM / killed | No incomplete cache write; retry next run |
 | Cache identity mismatch | Treat as miss; re-ASR |
 
@@ -353,12 +360,13 @@ On start when ASR enabled, log: tool versions, model path, max minutes, maxNew, 
 
 | Step | Work | Verify |
 |---|---|---|
-| 1 | This design accepted | review |
-| 2 | `lib/asr/`: types, language resolve (CJK), cache read/validate/write, cue map + unit tests | `npm test` |
-| 3 | Shell adapter: `execFile` yt-dlp + whisper.cpp; parse JSON segments | manual 1 CN video |
-| 4 | `caption-skips`: ensure kind available in candidate loop; conditional gate | unit/integration |
-| 5 | Wire `run.ts`: opt-in, backlog gate, duration cap, progress, detail, verified-gated skip delete | local sync |
-| 6 | README: install whisper.cpp + model, env vars, multi-run backfill expectation | — |
+| 1 | This design **ACCEPTED** | done |
+| 2 | **`VideoMeta` duration (D12):** `part=snippet,status,contentDetails`; parse ISO-8601 onto meta; tests | `npm test` |
+| 3 | `lib/asr/`: types, CJK language resolve, cache read/validate/write, cue map + unit tests | `npm test` |
+| 4 | Shell adapter: `execFile` yt-dlp + whisper.cpp; parse JSON segments | manual 1 CN video |
+| 5 | `caption-skips`: kinds in candidate loop; conditional gate when ASR on | unit/integration |
+| 6 | Wire `run.ts`: opt-in, backlog, **duration cap when known**, progress, detail, verified-gated skip delete | local sync |
+| 7 | README: install whisper.cpp + model, env vars, multi-run backfill expectation | — |
 
 ---
 
@@ -377,10 +385,12 @@ On start when ASR enabled, log: tool versions, model path, max minutes, maxNew, 
 | D9 | Auth-blocked | Never ASR | accepted |
 | D10 | Backlog gate | Candidate loop must **not** drop `no_captions` when ASR on; need **kinds** not id-only set | Claude D1 |
 | D11 | Subprocess | `execFile`/`spawn` argv array; no shell interpolation | Claude Q3 |
-| D12 | Max duration | **45 minutes** | **@owner** |
+| D12 | Max duration | **45 min when known**; requires `contentDetails` on `VideoMeta` | **@owner** + Claude D12 |
+| D12b | Duration unknown | **Still attempt ASR** | **@owner** |
 | D13 | Budget | Same `maxNew` as extract; document multi-run backfill | **@owner** |
 | D14 | Skip row after success | **Delete only if recipe verified**; always cache cues; re-extract uses cache | **@owner** + Claude |
 | D15 | `transcript_source` on recipes | Defer | Claude Q5 |
+| D16 | CJK miss (EN title/channel, CN speech) | Accept `auto` + `ROUX_ASR_LANGUAGE` override | **@owner** |
 
 ---
 
@@ -396,12 +406,12 @@ On start when ASR enabled, log: tool versions, model path, max minutes, maxNew, 
 
 ---
 
-## 10. Acceptance criteria
+## 10. Acceptance criteria — **met**
 
-1. ~~@claude-reviewer: no blocking objections once D1/D2 folded~~ → **this revision**  
-2. ~~@owner: language, max length, opt-in, budget, skip-delete~~ → **§8**  
-3. Final @claude-reviewer ack on revised doc → status **ACCEPTED**  
-4. Implementation starts at §7 step 2 only after ACCEPTED  
+1. @claude-reviewer: no blocking design objections (re-review **ACCEPTED** + D12 duration plumbing named).  
+2. @owner: language, max length, opt-in, budget, skip-delete, unknown-duration policy, CJK edge case.  
+3. §8 settled including D12 / D12b / D16.  
+4. Implementation may start at **§7 step 2** (`VideoMeta` duration), then steps 3+.
 
 ---
 
@@ -412,7 +422,8 @@ On start when ASR enabled, log: tool versions, model path, max minutes, maxNew, 
 - Extract `attempts` on ASR Chinese transcripts (LLM-1)  
 - Manual: 3 CN caption-disabled cooking videos → usable step timestamps  
 - Backlog: eligible `no_captions` count decreases across successive `--asr` syncs  
+- Watch: ASR quality when language fell back to `auto` (EN title / CN speech) — use `ROUX_ASR_LANGUAGE=zh` if weak  
 
 ---
 
-NEXT: @claude-reviewer (re-ack revised design)
+NEXT: @grok-builder — implement §7 (start with `VideoMeta` duration / step 2).
