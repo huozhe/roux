@@ -28,7 +28,10 @@ export function setTestDb(db: unknown | null): void {
 }
 
 export function getDb() {
-  if (_testDb) return _testDb as AppDb;
+  // Test inject only outside production (DCE-friendly for prod bundles).
+  if (process.env.NODE_ENV !== "production" && _testDb) {
+    return _testDb as AppDb;
+  }
   if (!_db) _db = createDb();
   return _db;
 }

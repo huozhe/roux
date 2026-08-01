@@ -44,7 +44,8 @@ export function setTestUserId(userId: string | null | undefined): void {
 
 /** Session app user id or 401 response. */
 export async function requireUserId(): Promise<string | NextResponse> {
-  if (_testUserId !== undefined) {
+  // Test bypass only outside production so the branch can DCE out of prod builds.
+  if (process.env.NODE_ENV !== "production" && _testUserId !== undefined) {
     if (!_testUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
