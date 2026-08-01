@@ -162,4 +162,8 @@ export const RATE_LIMITS = {
     perUser: { limit: 5, windowMs: 60 * 60 * 1000 },
     global: { limit: 100, windowMs: 60 * 60 * 1000 },
   },
+  /** Create inter-user grants (spam / abuse). */
+  recipeGrants: {
+    perUser: { limit: 30, windowMs: 60 * 60 * 1000 },
+  },
 } as const;

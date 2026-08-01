@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isUnauthorized, requireUserId } from "@/lib/recipes/auth";
 import {
   deleteRecipe,
-  getRecipe,
+  getRecipeForViewer,
   patchRecipe,
   type RecipePatch,
 } from "@/lib/recipes/queries";
@@ -10,18 +10,21 @@ import type { Ingredient, Step } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** GET /api/recipes/:id */
+/** GET /api/recipes/:id — owner or grantee (getRecipeForViewer). */
 export async function GET(_req: Request, ctx: Ctx) {
   const userId = await requireUserId();
   if (isUnauthorized(userId)) return userId;
 
   const { id } = await ctx.params;
   try {
-    const recipe = await getRecipe(userId, id);
-    if (!recipe) {
+    const access = await getRecipeForViewer(userId, id);
+    if (!access) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({ recipe });
+    return NextResponse.json({
+      recipe: access.recipe,
+      role: access.role,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to get recipe" },

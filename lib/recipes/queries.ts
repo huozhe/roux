@@ -715,15 +715,18 @@ export async function createRecipeGrant(
 
 /**
  * Revoke grant. Authz via recipes.user_id join (not denormalized owner_user_id alone).
+ * If expectedRecipeId is set and does not match the grant's recipe → not_found.
  */
 export async function revokeRecipeGrant(
   actorUserId: string,
   grantId: string,
+  expectedRecipeId?: string,
 ): Promise<"ok" | "not_found" | "forbidden"> {
   const db = getDb();
   const rows = await db
     .select({
       id: recipeGrants.id,
+      recipeId: recipeGrants.recipeId,
       recipeOwnerId: recipes.userId,
       revokedAt: recipeGrants.revokedAt,
     })
@@ -734,6 +737,7 @@ export async function revokeRecipeGrant(
 
   const row = rows[0];
   if (!row) return "not_found";
+  if (expectedRecipeId && row.recipeId !== expectedRecipeId) return "not_found";
   if (row.recipeOwnerId !== actorUserId) return "forbidden";
   if (row.revokedAt) return "ok";
 
