@@ -40,6 +40,10 @@ export default auth((req) => {
   }
 
   if (!loggedIn && !isPublic) {
+    // Browser fetch("/api/...") must get JSON 401, not a 302→HTML login page.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
