@@ -8,8 +8,8 @@ import { SYSTEM_PROMPT } from "./prompt";
  * Fail if the prompt is trimmed below a conservative floor so caching
  * does not silently no-op (cache_creation_input_tokens stays 0).
  */
-/** ~1024 tok × 3.64 chars/token (measured); soft floor so trim cannot silent-disable cache. */
-const MIN_CHARS_FOR_CACHE = 3700;
+/** 1024 tok × 3.64 chars/token = 3728 min; 3800 keeps ~2% margin. Verified via countTokens. */
+const MIN_CHARS_FOR_CACHE = 3800;
 
 describe("SYSTEM_PROMPT cache eligibility", () => {
   it("stays long enough for Anthropic prompt cache minimum", () => {
