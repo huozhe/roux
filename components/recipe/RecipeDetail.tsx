@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { IngredientsList } from "@/components/recipe/IngredientsList";
 import {
   formatCookMinutes,
-  formatQty,
   formatTimestamp,
   fullDate,
   relativeAgo,
@@ -13,6 +12,7 @@ import {
   youtubeStepUrl,
   youtubeWatchUrl,
 } from "@/lib/format";
+import { RecipeShareDialog } from "@/components/recipe/RecipeShareDialog";
 import { useLivePrefs } from "@/lib/prefs/client";
 import type { Ingredient, Recipe, Step, UserPrefs } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
@@ -61,10 +61,14 @@ async function apiJson<T>(
 export function RecipeDetail({
   recipe: initial,
   prefs = DEFAULT_PREFS,
+  role = "owner",
 }: {
   recipe: Recipe;
   prefs?: UserPrefs;
+  /** owner = full UI; grantee = read-only (inter-user share). */
+  role?: "owner" | "grantee";
 }) {
+  const isGrantee = role === "grantee";
   const [recipe, setRecipe] = useState(initial);
   const livePrefs = useLivePrefs(prefs);
   const showTimestamps = livePrefs.timestamps !== false;
@@ -75,9 +79,6 @@ export function RecipeDetail({
   const [notesStatus, setNotesStatus] = useState("Only you can see these");
   const [videoOpen, setVideoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareSlug, setShareSlug] = useState<string | null>(null);
-  const [shareBusy, setShareBusy] = useState(false);
-  const [copied, setCopied] = useState<"" | "link" | "text">("");
   const [confirming, setConfirming] = useState(false);
   const [removed, setRemoved] = useState<RemoveMode>(null);
   const [busy, setBusy] = useState(false);
@@ -87,7 +88,6 @@ export function RecipeDetail({
 
   const closeShare = useCallback(() => setShareOpen(false), []);
   const closeConfirm = useCallback(() => setConfirming(false), []);
-  const shareDialogRef = useDialogA11y(shareOpen, closeShare);
   const confirmDialogRef = useDialogA11y(confirming, closeConfirm);
 
   const gone = recipe.video_status === "gone";
@@ -203,75 +203,6 @@ export function RecipeDetail({
     notesTimer.current = setTimeout(() => {
       void persistNotes(value);
     }, 600);
-  };
-
-  const openShare = async () => {
-    setCopied("");
-    setShareOpen(true);
-    setError(null);
-    if (shareSlug) return;
-    setShareBusy(true);
-    const result = await apiJson<{ slug: string }>(
-      `/api/recipes/${recipe.id}/share`,
-      { method: "POST" },
-    );
-    setShareBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      setShareOpen(false);
-      return;
-    }
-    setShareSlug(result.data.slug);
-  };
-
-  const killShare = async () => {
-    if (!shareSlug || shareBusy) return;
-    setShareBusy(true);
-    const result = await apiJson<undefined>(`/api/share/${shareSlug}`, {
-      method: "DELETE",
-    });
-    setShareBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setShareSlug(null);
-    setShareOpen(false);
-  };
-
-  const shareUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/r/${shareSlug ?? "…"}`
-      : `roux.cooking/r/${shareSlug ?? "…"}`;
-
-  const copyLink = async () => {
-    if (!shareSlug) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied("link");
-    } catch {
-      setError("Couldn’t copy link");
-    }
-  };
-
-  const copyText = async () => {
-    const lines = [
-      recipe.title,
-      "",
-      "Ingredients",
-      ...recipe.ingredients.map(
-        (ing) => `${formatQty(ing)} ${ing.name}`.trim(),
-      ),
-      "",
-      "Steps",
-      ...recipe.steps.map((s) => `${s.n}. ${s.text}`),
-    ];
-    try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      setCopied("text");
-    } catch {
-      setError("Couldn’t copy text");
-    }
   };
 
   const archiveRecipe = async () => {
@@ -421,35 +352,43 @@ export function RecipeDetail({
               Watch video
             </a>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => (editing ? cancelEdit() : startEdit())}
-            style={{ minHeight: 44 }}
-            disabled={busy}
-          >
-            {editing ? "Cancel edit" : "Edit recipe"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void openShare()}
-            style={{ minHeight: 44 }}
-            disabled={busy || shareBusy}
-          >
-            <ShareIcon />
-            Share
-          </button>
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary"
-            onClick={() => setConfirming(true)}
-            title="Remove from library"
-            style={{ width: 44, height: 44 }}
-            disabled={busy}
-          >
-            <TrashIcon />
-          </button>
+          {!isGrantee ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => (editing ? cancelEdit() : startEdit())}
+                style={{ minHeight: 44 }}
+                disabled={busy}
+              >
+                {editing ? "Cancel edit" : "Edit recipe"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShareOpen(true)}
+                style={{ minHeight: 44 }}
+                disabled={busy}
+              >
+                <ShareIcon />
+                Share
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon btn-secondary"
+                onClick={() => setConfirming(true)}
+                title="Remove from library"
+                style={{ width: 44, height: 44 }}
+                disabled={busy}
+              >
+                <TrashIcon />
+              </button>
+            </>
+          ) : (
+            <span className="tag tag-neutral" style={{ alignSelf: "center" }}>
+              Shared with you · read-only
+            </span>
+          )}
         </div>
       </div>
 
@@ -500,116 +439,30 @@ export function RecipeDetail({
               ? "The uploader took this video down, so the link is dead. The write-up, your notes and the timestamps stay — they're yours now. Roux keeps the channel name and the original video title for searching."
               : "You removed this from the playlist, but the recipe stays in your library until you archive it. The video still plays."}
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setConfirming(true)}
-            style={{ marginTop: 0, flex: "none", background: "var(--color-bg)" }}
-          >
-            Remove recipe
-          </button>
+          {!isGrantee ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setConfirming(true)}
+              style={{ marginTop: 0, flex: "none", background: "var(--color-bg)" }}
+            >
+              Remove recipe
+            </button>
+          ) : null}
         </div>
       )}
 
-      {shareOpen && (
-        <div className="dialog-backdrop" role="presentation" onClick={closeShare}>
-          <div
-            ref={shareDialogRef}
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="share-dialog-title"
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dialog-title" id="share-dialog-title">
-              Share “{recipe.title}”
-            </div>
-            <div className="dialog-body">
-              Anyone with the link can read the ingredients and steps. Your notes
-              and your verified flags are never included.
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 14px",
-                borderRadius: 20,
-                background: "var(--color-bg)",
-                border: "1px solid var(--color-divider)",
-                minWidth: 0,
-              }}
-            >
-              <span
-                style={{
-                  flex: "1 1 140px",
-                  minWidth: 0,
-                  fontSize: 13.5,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {shareBusy || !shareSlug ? "Creating link…" : shareUrl}
-              </span>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void copyLink()}
-                style={{ marginTop: 0, flex: "none" }}
-                disabled={!shareSlug || shareBusy}
-              >
-                {copied === "link" ? "Link copied" : "Copy link"}
-              </button>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8.8 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => void copyText()}
-              >
-                {copied === "text" ? "Recipe copied" : "Copy as text"}
-              </button>
-              <button type="button" className="btn btn-secondary" disabled>
-                Print / PDF
-              </button>
-            </div>
-            <div
-              className="dialog-actions"
-              style={{
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void killShare()}
-                disabled={!shareSlug || shareBusy}
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: 13,
-                  color: "var(--color-accent-700)",
-                }}
-              >
-                Kill this link
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={closeShare}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {!isGrantee && shareOpen ? (
+        <RecipeShareDialog
+          key={recipe.id}
+          open={shareOpen}
+          recipe={recipe}
+          onClose={closeShare}
+          onError={setError}
+        />
+      ) : null}
 
-      {confirming && (
+      {confirming && !isGrantee && (
         <div className="dialog-backdrop" role="presentation" onClick={closeConfirm}>
           <div
             ref={confirmDialogRef}
@@ -661,7 +514,7 @@ export function RecipeDetail({
         </div>
       )}
 
-      {editing && draft ? (
+      {editing && draft && !isGrantee ? (
         <EditForm
           draft={draft}
           setDraft={setDraft}
@@ -671,7 +524,7 @@ export function RecipeDetail({
         />
       ) : (
         <>
-          {!recipe.verified && (
+          {!isGrantee && !recipe.verified && (
             <div
               className="card"
               style={{
@@ -726,6 +579,7 @@ export function RecipeDetail({
               onNotes={onNotesChange}
               notesStatus={notesStatus}
               showTimestamps={showTimestamps}
+              showNotes={!isGrantee}
             />
           ) : (
             <SingleScroll
@@ -738,6 +592,7 @@ export function RecipeDetail({
               onNotes={onNotesChange}
               notesStatus={notesStatus}
               showTimestamps={showTimestamps}
+              showNotes={!isGrantee}
             />
           )}
         </>
@@ -787,6 +642,7 @@ function SingleScroll({
   onNotes,
   notesStatus,
   showTimestamps,
+  showNotes = true,
 }: {
   recipe: Recipe;
   playable: boolean;
@@ -797,6 +653,7 @@ function SingleScroll({
   onNotes: (v: string) => void;
   notesStatus: string;
   showTimestamps: boolean;
+  showNotes?: boolean;
 }) {
   return (
     <div
@@ -998,7 +855,9 @@ function SingleScroll({
         ))}
       </div>
 
-      <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+      {showNotes ? (
+        <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+      ) : null}
     </div>
   );
 }
@@ -1013,6 +872,7 @@ function SplitLayout({
   onNotes,
   notesStatus,
   showTimestamps,
+  showNotes = true,
 }: {
   recipe: Recipe;
   playable: boolean;
@@ -1022,6 +882,7 @@ function SplitLayout({
   notes: string;
   onNotes: (v: string) => void;
   notesStatus: string;
+  showNotes?: boolean;
   showTimestamps: boolean;
 }) {
   return (
@@ -1206,7 +1067,9 @@ function SplitLayout({
             </div>
           </div>
         ))}
-        <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+        {showNotes ? (
+          <NotesCard notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
+        ) : null}
       </div>
     </div>
   );

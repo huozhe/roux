@@ -3,7 +3,11 @@ import { auth } from "@/lib/auth";
 import { listRecipes } from "@/lib/data/recipes";
 import { relativeAgo } from "@/lib/format";
 import { resolveAppUserId } from "@/lib/recipes/auth";
-import { getUserPrefs } from "@/lib/recipes/queries";
+import {
+  getUserPrefs,
+  listGrantedToMe,
+  type GrantedRecipeSummary,
+} from "@/lib/recipes/queries";
 import { getSyncStatusSummary } from "@/lib/sync";
 import { DEFAULT_PREFS } from "@/lib/types";
 
@@ -21,12 +25,25 @@ export default async function LibraryPage() {
 
   let lastSyncLabel = "never";
   let prefs = DEFAULT_PREFS;
+  let sharedWithMe: GrantedRecipeSummary[] = [];
 
   const session = await auth().catch(() => null);
   const userId = await resolveAppUserId(session?.user?.id);
   if (userId && process.env.DATABASE_URL) {
     try {
       prefs = await getUserPrefs(userId);
+    } catch {
+      /* defaults */
+    }
+
+    try {
+      sharedWithMe = await listGrantedToMe(userId);
+    } catch {
+      /* leave empty rather than hide via prefs failure — but still soft */
+      /* rethrow would surface error.tsx; keep soft for shelf only */
+    }
+
+    try {
       const status = await getSyncStatusSummary(userId);
       const finished = status.lastRun?.finishedAt ?? status.lastRun?.startedAt;
       if (finished) {
@@ -41,7 +58,7 @@ export default async function LibraryPage() {
         }
       }
     } catch {
-      /* keep defaults */
+      /* keep "never" */
     }
   }
 
@@ -50,6 +67,7 @@ export default async function LibraryPage() {
       recipes={recipes}
       lastSyncLabel={lastSyncLabel}
       prefs={prefs}
+      sharedWithMe={sharedWithMe}
     />
   );
 }
