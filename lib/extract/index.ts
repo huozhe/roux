@@ -17,6 +17,21 @@ export type ExtractOpts = {
   model?: string;
 };
 
+/** Per-attempt Anthropic usage for sync_runs.detail telemetry. */
+export type ExtractAttemptUsage = {
+  attempt: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+};
+
+export type ExtractOutcome = {
+  recipe: ExtractedRecipe;
+  attempts: number;
+  usage: ExtractAttemptUsage[];
+};
+
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 /** Long Chinese cooking videos can produce large JSON; 4k was truncating. */
 const MAX_TOKENS = 8192;
@@ -28,20 +43,54 @@ function textFromMessage(msg: Anthropic.Message): string {
     .join("\n");
 }
 
+function usageFromMessage(
+  attempt: number,
+  msg: Anthropic.Message,
+): ExtractAttemptUsage {
+  const u = msg.usage as Anthropic.Usage & {
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+  return {
+    attempt,
+    input_tokens: u.input_tokens,
+    output_tokens: u.output_tokens,
+    ...(u.cache_creation_input_tokens != null
+      ? { cache_creation_input_tokens: u.cache_creation_input_tokens }
+      : {}),
+    ...(u.cache_read_input_tokens != null
+      ? { cache_read_input_tokens: u.cache_read_input_tokens }
+      : {}),
+  };
+}
+
 async function callClaude(
   client: Anthropic,
   model: string,
   userContent: string,
-): Promise<{ text: string; truncated: boolean }> {
+  attempt: number,
+): Promise<{
+  text: string;
+  truncated: boolean;
+  usage: ExtractAttemptUsage;
+}> {
   const msg = await client.messages.create({
     model,
     max_tokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    // SYSTEM_PROMPT measured ~1063 tokens via countTokens (>1024 Sonnet cache min).
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: userContent }],
   });
   return {
     text: textFromMessage(msg),
     truncated: msg.stop_reason === "max_tokens",
+    usage: usageFromMessage(attempt, msg),
   };
 }
 
@@ -52,7 +101,7 @@ async function callClaude(
 export async function extractRecipe(
   cues: CaptionCue[],
   opts?: ExtractOpts,
-): Promise<ExtractedRecipe> {
+): Promise<ExtractOutcome> {
   if (!cues.length) {
     throw new Error("extractRecipe: no caption cues");
   }
@@ -63,9 +112,15 @@ export async function extractRecipe(
 
   let lastError = "unknown";
   let lastRaw = "";
+  const usage: ExtractAttemptUsage[] = [];
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { text, truncated } = await callClaude(client, model, userPrompt);
+    const {
+      text,
+      truncated,
+      usage: attemptUsage,
+    } = await callClaude(client, model, userPrompt, attempt + 1);
+    usage.push(attemptUsage);
     lastRaw = text;
     if (truncated) {
       lastError = "Response truncated (max_tokens); need shorter recipe JSON";
@@ -77,7 +132,11 @@ export async function extractRecipe(
       continue;
     }
     try {
-      return parseExtractedJson(text);
+      return {
+        recipe: parseExtractedJson(text),
+        attempts: attempt + 1,
+        usage,
+      };
     } catch (err) {
       lastError = formatParseError(err);
       userPrompt = buildRetryPrompt(text, lastError);

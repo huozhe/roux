@@ -55,6 +55,18 @@ export type SyncDetail = {
   errors: Array<{ videoId?: string; message: string }>;
   maxNewVideos: number;
   playlists: string[];
+  /** Per-video extract token usage (Anthropic) for cost / retry analysis. */
+  extracts?: Array<{
+    videoId: string;
+    attempts: number;
+    usage: Array<{
+      attempt: number;
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    }>;
+  }>;
 };
 
 function defaultMaxNew(): number {
@@ -108,6 +120,7 @@ export async function runSyncForUser(
     errors: [],
     maxNewVideos: maxNew,
     playlists: [],
+    extracts: [],
   };
 
   let found = 0;
@@ -351,9 +364,11 @@ export async function runSyncForUser(
       });
 
       try {
-        const extracted = await extractRecipe(cues, {
-          videoTitle,
-        });
+        const { recipe: extracted, attempts, usage } = await extractRecipe(
+          cues,
+          { videoTitle },
+        );
+        detail.extracts!.push({ videoId: item.videoId, attempts, usage });
 
         const ingredients: Ingredient[] = extracted.ingredients;
         const steps = toSteps(extracted.steps);
