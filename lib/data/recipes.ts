@@ -40,17 +40,7 @@ export async function listRecipes(
   return listFromSql(userId, params);
 }
 
-export async function getRecipe(
-  id: string,
-  opts?: ListRecipesOpts,
-): Promise<Recipe | null> {
-  if (!process.env.DATABASE_URL) {
-    return FIXTURE_RECIPES.find((r) => r.id === id) ?? null;
-  }
-
-  const userId = await resolveUserId(opts);
-  if (!userId) return null;
-
-  const { getRecipe: getFromSql } = await import("@/lib/recipes/queries");
-  return getFromSql(userId, id);
+/** Fixture-only helper for no-DB demo pages. Live path uses queries.getRecipe* directly. */
+export async function getRecipe(id: string): Promise<Recipe | null> {
+  return FIXTURE_RECIPES.find((r) => r.id === id) ?? null;
 }

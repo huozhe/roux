@@ -373,11 +373,11 @@ export async function deleteRecipe(
   return true;
 }
 
-function randomHex4(): string {
-  return randomBytes(2).toString("hex");
+function randomHex8(): string {
+  return randomBytes(4).toString("hex");
 }
 
-/** Idempotent: return existing non-revoked slug, else create title-4hex. */
+/** Idempotent: return existing non-revoked slug, else create title + 8-hex (SEC-5). */
 export async function shareRecipe(
   userId: string,
   id: string,
@@ -402,7 +402,7 @@ export async function shareRecipe(
 
   // Never reuse revoked slugs; mint a fresh one (retry on PK collision).
   for (let attempt = 0; attempt < 8; attempt++) {
-    const slug = makeShareSlug(recipe.title, randomHex4());
+    const slug = makeShareSlug(recipe.title, randomHex8());
     try {
       await db.insert(shareLinks).values({ recipeId: id, slug });
       return { slug };
