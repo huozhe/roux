@@ -1,5 +1,11 @@
 import type { RecipeRow } from "@/lib/db/schema";
-import type { Confidence, Recipe, VideoStatus } from "@/lib/types";
+import type {
+  Confidence,
+  Ingredient,
+  Recipe,
+  Step,
+  VideoStatus,
+} from "@/lib/types";
 
 function iso(d: Date | null | undefined): string | null {
   if (d == null) return null;
@@ -16,7 +22,36 @@ function asVideoStatus(v: string): VideoStatus {
   return "ok";
 }
 
-/** DB row (drizzle camelCase) → API `Recipe` (snake-ish). */
+/** Coerce jsonb ingredients (LLM / PATCH may be partial). */
+export function asIngredients(v: unknown): Ingredient[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((item) => {
+    const o = item as Partial<Ingredient>;
+    const group =
+      typeof o.group === "string" && o.group.trim() ? o.group.trim() : undefined;
+    return {
+      qty: typeof o.qty === "string" ? o.qty : "",
+      name: typeof o.name === "string" ? o.name : "",
+      inferred: Boolean(o.inferred),
+      ...(group ? { group } : {}),
+    };
+  });
+}
+
+/** Coerce jsonb steps; renumber when `n` missing. */
+export function asSteps(v: unknown): Step[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((item, i) => {
+    const o = item as Partial<Step>;
+    return {
+      n: typeof o.n === "number" ? o.n : i + 1,
+      text: typeof o.text === "string" ? o.text : "",
+      t_seconds: typeof o.t_seconds === "number" ? o.t_seconds : 0,
+    };
+  });
+}
+
+/** DB row (drizzle camelCase) → API `Recipe` (snake-ish). Single mapper for SSR + API. */
 export function rowToRecipe(row: RecipeRow): Recipe {
   return {
     id: row.id,
@@ -30,8 +65,8 @@ export function rowToRecipe(row: RecipeRow): Recipe {
     main_ingredient: row.mainIngredient,
     cook_minutes: row.cookMinutes,
     servings: row.servings,
-    ingredients: row.ingredients ?? [],
-    steps: row.steps ?? [],
+    ingredients: asIngredients(row.ingredients),
+    steps: asSteps(row.steps),
     notes: row.notes,
     confidence: asConfidence(row.confidence),
     verified: row.verified,
@@ -42,4 +77,12 @@ export function rowToRecipe(row: RecipeRow): Recipe {
     written_at: iso(row.writtenAt) ?? new Date(0).toISOString(),
     archived_at: iso(row.archivedAt),
   };
+}
+
+/**
+ * Public share surface: strip private fields.
+ * Used by getSharedRecipeBySlug (and tests) so privacy cannot drift.
+ */
+export function stripRecipeForPublicShare(recipe: Recipe): Recipe {
+  return { ...recipe, notes: null, verified: false };
 }
