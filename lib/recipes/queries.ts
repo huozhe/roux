@@ -14,6 +14,7 @@ import {
 import { randomBytes } from "node:crypto";
 import {
   getDb,
+  recipeGrants,
   recipeTombstones,
   recipes,
   shareLinks,
@@ -482,6 +483,7 @@ export async function listShareLinks(
 /**
  * Public share resolve: non-revoked slug → recipe (notes stripped).
  * Returns null if missing/revoked.
+ * Note: does NOT filter archived_at (public link = publish; deliberate vs grants).
  */
 export async function getSharedRecipeBySlug(
   slug: string,
@@ -504,6 +506,242 @@ export async function getSharedRecipeBySlug(
   if (!row) return null;
   // Public page never exposes personal notes / verify state.
   return stripRecipeForPublicShare(rowToRecipe(row.recipe));
+}
+
+// ── Inter-user grants (docs/plans/inter-user-sharing.md) ─────────────────
+
+export type RecipeViewerAccess = {
+  recipe: Recipe;
+  role: "owner" | "grantee";
+};
+
+/**
+ * Owner-or-grantee read. Keep `getRecipe` owner-only for write paths.
+ * Grantees: active grant, not deleted, not archived; notes/verified stripped.
+ */
+export async function getRecipeForViewer(
+  viewerId: string,
+  id: string,
+): Promise<RecipeViewerAccess | null> {
+  const asOwner = await getRecipe(viewerId, id);
+  if (asOwner) {
+    return { recipe: asOwner, role: "owner" };
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({ recipe: recipes })
+    .from(recipeGrants)
+    .innerJoin(recipes, eq(recipeGrants.recipeId, recipes.id))
+    .where(
+      and(
+        eq(recipeGrants.recipientUserId, viewerId),
+        eq(recipeGrants.recipeId, id),
+        isNull(recipeGrants.revokedAt),
+        isNull(recipes.deletedAt),
+        isNull(recipes.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    recipe: stripRecipeForPublicShare(rowToRecipe(row.recipe)),
+    role: "grantee",
+  };
+}
+
+export type GrantedRecipeSummary = {
+  grantId: string;
+  recipeId: string;
+  title: string;
+  ownerUserId: string;
+  ownerName: string | null;
+  ownerEmail: string;
+  grantedAt: string;
+  cuisine: string | null;
+  mainIngredient: string | null;
+  cookMinutes: number | null;
+  videoStatus: string;
+};
+
+/** "Shared with me" shelf — excludes archived + deleted (design D8). */
+export async function listGrantedToMe(
+  recipientUserId: string,
+): Promise<GrantedRecipeSummary[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      grantId: recipeGrants.id,
+      recipeId: recipes.id,
+      title: recipes.title,
+      ownerUserId: recipes.userId,
+      ownerName: users.name,
+      ownerEmail: users.email,
+      grantedAt: recipeGrants.createdAt,
+      cuisine: recipes.cuisine,
+      mainIngredient: recipes.mainIngredient,
+      cookMinutes: recipes.cookMinutes,
+      videoStatus: recipes.videoStatus,
+    })
+    .from(recipeGrants)
+    .innerJoin(recipes, eq(recipeGrants.recipeId, recipes.id))
+    .innerJoin(users, eq(recipes.userId, users.id))
+    .where(
+      and(
+        eq(recipeGrants.recipientUserId, recipientUserId),
+        isNull(recipeGrants.revokedAt),
+        isNull(recipes.deletedAt),
+        isNull(recipes.archivedAt),
+      ),
+    )
+    .orderBy(desc(recipeGrants.createdAt));
+
+  return rows.map((r) => ({
+    grantId: r.grantId,
+    recipeId: r.recipeId,
+    title: r.title,
+    ownerUserId: r.ownerUserId,
+    ownerName: r.ownerName,
+    ownerEmail: r.ownerEmail,
+    grantedAt: r.grantedAt.toISOString(),
+    cuisine: r.cuisine,
+    mainIngredient: r.mainIngredient,
+    cookMinutes: r.cookMinutes,
+    videoStatus: r.videoStatus,
+  }));
+}
+
+export type OutgoingGrant = {
+  grantId: string;
+  recipeId: string;
+  recipientUserId: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  createdAt: string;
+};
+
+/** Active grants for recipes owned by this user (optional filter by recipe). */
+export async function listOutgoingGrants(
+  ownerUserId: string,
+  recipeId?: string,
+): Promise<OutgoingGrant[]> {
+  const db = getDb();
+  const filters: SQL[] = [
+    eq(recipes.userId, ownerUserId),
+    isNull(recipeGrants.revokedAt),
+    isNull(recipes.deletedAt),
+  ];
+  if (recipeId) filters.push(eq(recipeGrants.recipeId, recipeId));
+
+  const rows = await db
+    .select({
+      grantId: recipeGrants.id,
+      recipeId: recipeGrants.recipeId,
+      recipientUserId: recipeGrants.recipientUserId,
+      recipientEmail: users.email,
+      recipientName: users.name,
+      createdAt: recipeGrants.createdAt,
+    })
+    .from(recipeGrants)
+    .innerJoin(recipes, eq(recipeGrants.recipeId, recipes.id))
+    .innerJoin(users, eq(recipeGrants.recipientUserId, users.id))
+    .where(and(...filters))
+    .orderBy(desc(recipeGrants.createdAt));
+
+  return rows.map((r) => ({
+    grantId: r.grantId,
+    recipeId: r.recipeId,
+    recipientUserId: r.recipientUserId,
+    recipientEmail: r.recipientEmail,
+    recipientName: r.recipientName,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Owner grants recipe to an existing user by email.
+ * Returns null for: not owner, unknown email, self-grant (same 404 shape — no oracle).
+ * owner_user_id is always derived from recipes.user_id, never from request input.
+ */
+export async function createRecipeGrant(
+  ownerUserId: string,
+  recipeId: string,
+  recipientEmail: string,
+): Promise<{ grantId: string } | null> {
+  const email = recipientEmail.trim().toLowerCase();
+  if (!email) return null;
+
+  const owned = await getRecipe(ownerUserId, recipeId);
+  if (!owned) return null;
+
+  const db = getDb();
+  const recipients = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1);
+  const recipient = recipients[0];
+  if (!recipient) return null;
+  if (recipient.id === ownerUserId) return null;
+
+  // Idempotent: already active
+  const existing = await db
+    .select({ id: recipeGrants.id })
+    .from(recipeGrants)
+    .where(
+      and(
+        eq(recipeGrants.recipeId, recipeId),
+        eq(recipeGrants.recipientUserId, recipient.id),
+        isNull(recipeGrants.revokedAt),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return { grantId: existing[0].id };
+
+  // owner_user_id from ownership check above — same as recipes.user_id
+  const [inserted] = await db
+    .insert(recipeGrants)
+    .values({
+      recipeId,
+      ownerUserId,
+      recipientUserId: recipient.id,
+    })
+    .returning({ id: recipeGrants.id });
+
+  return inserted ? { grantId: inserted.id } : null;
+}
+
+/**
+ * Revoke grant. Authz via recipes.user_id join (not denormalized owner_user_id alone).
+ */
+export async function revokeRecipeGrant(
+  actorUserId: string,
+  grantId: string,
+): Promise<"ok" | "not_found" | "forbidden"> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: recipeGrants.id,
+      recipeOwnerId: recipes.userId,
+      revokedAt: recipeGrants.revokedAt,
+    })
+    .from(recipeGrants)
+    .innerJoin(recipes, eq(recipeGrants.recipeId, recipes.id))
+    .where(eq(recipeGrants.id, grantId))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return "not_found";
+  if (row.recipeOwnerId !== actorUserId) return "forbidden";
+  if (row.revokedAt) return "ok";
+
+  await db
+    .update(recipeGrants)
+    .set({ revokedAt: new Date() })
+    .where(eq(recipeGrants.id, grantId));
+  return "ok";
 }
 
 function asUserPrefs(v: unknown): UserPrefs {
