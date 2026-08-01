@@ -32,7 +32,18 @@ export default async function LibraryPage() {
   if (userId && process.env.DATABASE_URL) {
     try {
       prefs = await getUserPrefs(userId);
+    } catch {
+      /* defaults */
+    }
+
+    try {
       sharedWithMe = await listGrantedToMe(userId);
+    } catch {
+      /* leave empty rather than hide via prefs failure — but still soft */
+      /* rethrow would surface error.tsx; keep soft for shelf only */
+    }
+
+    try {
       const status = await getSyncStatusSummary(userId);
       const finished = status.lastRun?.finishedAt ?? status.lastRun?.startedAt;
       if (finished) {
@@ -47,7 +58,7 @@ export default async function LibraryPage() {
         }
       }
     } catch {
-      /* keep defaults */
+      /* keep "never" */
     }
   }
 

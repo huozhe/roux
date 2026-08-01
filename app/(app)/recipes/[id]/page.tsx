@@ -20,28 +20,24 @@ export default async function RecipePage({
   const session = await auth().catch(() => null);
   const userId = await resolveAppUserId(session?.user?.id);
 
+  // Fixture / no-DB demo path
+  if (!userId || !process.env.DATABASE_URL) {
+    const { getRecipe } = await import("@/lib/data/recipes");
+    const recipe = await getRecipe(id);
+    if (!recipe) notFound();
+    return <RecipeDetail recipe={recipe} prefs={DEFAULT_PREFS} role="owner" />;
+  }
+
   let prefs = DEFAULT_PREFS;
-  let access: Awaited<ReturnType<typeof getRecipeForViewer>> = null;
-
-  if (userId && process.env.DATABASE_URL) {
-    try {
-      prefs = await getUserPrefs(userId);
-      access = await getRecipeForViewer(userId, id);
-    } catch {
-      /* fall through */
-    }
+  try {
+    prefs = await getUserPrefs(userId);
+  } catch {
+    /* defaults — do not couple prefs failures to recipe visibility */
   }
 
-  if (!access) {
-    // Fixture / no-DB demo path
-    if (!process.env.DATABASE_URL) {
-      const { getRecipe } = await import("@/lib/data/recipes");
-      const recipe = await getRecipe(id);
-      if (!recipe) notFound();
-      return <RecipeDetail recipe={recipe} prefs={prefs} role="owner" />;
-    }
-    notFound();
-  }
+  // Let access failures surface via error.tsx rather than a false 404
+  const access = await getRecipeForViewer(userId, id);
+  if (!access) notFound();
 
   return (
     <RecipeDetail recipe={access.recipe} prefs={prefs} role={access.role} />
