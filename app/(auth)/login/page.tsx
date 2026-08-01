@@ -22,7 +22,7 @@ function RouxMark({ size = 22 }: { size?: number }) {
 
 export default function LoginPage() {
   return (
-    <div
+    <main
       style={{
         minHeight: "100%",
         display: "grid",
@@ -110,7 +110,7 @@ export default function LoginPage() {
               display: "flex",
               alignItems: "center",
               gap: 10,
-              color: "var(--color-neutral-500)",
+              color: "var(--color-neutral-700)",
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -153,6 +153,6 @@ export default function LoginPage() {
           is public.
         </p>
       </div>
-    </div>
+    </main>
   );
 }

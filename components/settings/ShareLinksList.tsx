@@ -48,7 +48,7 @@ export function ShareLinksList({ initialLinks = [] }: ShareLinksListProps) {
           gap: 10,
         }}
       >
-        <h4 style={{ margin: 0 }}>Shared links</h4>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Shared links</h2>
         <span className="text-muted" style={{ fontSize: "12.5px" }}>
           Read-only pages you&apos;ve handed out
         </span>

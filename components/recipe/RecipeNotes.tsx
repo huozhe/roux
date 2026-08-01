@@ -19,7 +19,7 @@ export function RecipeNotes({
         background: "var(--color-accent-2-100)",
       }}
     >
-      <h4 style={{ margin: 0 }}>My notes</h4>
+      <h2 style={{ margin: 0, fontSize: 20 }}>My notes</h2>
       <textarea
         className="input"
         placeholder="Substitutions, what went wrong, what to do differently…"

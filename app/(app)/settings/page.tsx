@@ -100,7 +100,7 @@ export default async function SettingsPage() {
           <AccountCard />
         ) : (
           <div className="card elev-sm" style={{ padding: 22, gap: "17.6px" }}>
-            <h4 style={{ margin: 0 }}>Account</h4>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Account</h2>
             <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
               Sign in with Google to load your YouTube playlists and sync.
             </p>
@@ -119,7 +119,7 @@ export default async function SettingsPage() {
         <PrefsForm initial={prefs} />
 
         <div className="card elev-sm" style={{ padding: 22, gap: "8.8px" }}>
-          <h4 style={{ margin: 0 }}>When a video disappears</h4>
+          <h2 style={{ margin: 0, fontSize: 20 }}>When a video disappears</h2>
           <p style={{ margin: 0, fontSize: 14 }}>
             Roux keeps the recipe. Whether you pull the video out of the
             playlist or the uploader takes it down, the write-up, your edits and

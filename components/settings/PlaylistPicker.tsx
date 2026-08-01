@@ -119,7 +119,7 @@ export function PlaylistPicker() {
           gap: 10,
         }}
       >
-        <h4 style={{ margin: 0 }}>Source playlists</h4>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Source playlists</h2>
         <span
           className="text-muted"
           style={{ fontSize: "12.5px", marginRight: "auto" }}

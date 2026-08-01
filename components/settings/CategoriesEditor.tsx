@@ -191,7 +191,7 @@ export function CategoriesEditor({
 
   return (
     <div className="card elev-sm" style={{ padding: 22, gap: "13.2px" }}>
-      <h4 style={{ margin: 0 }}>Categories</h4>
+      <h2 style={{ margin: 0, fontSize: 20 }}>Categories</h2>
       <p className="text-muted" style={{ margin: 0, fontSize: "13.5px" }}>
         Library filter chips. Add your own, or remove any tag (×). Built-ins can
         be restored with + Add using the same name. Model-guessed tags are

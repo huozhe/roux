@@ -204,7 +204,7 @@ function SingleScroll({
 
       <div className="card" style={{ gap: 13.2, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h4 style={{ margin: 0 }}>Ingredients</h4>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Ingredients</h2>
           <span className="text-muted" style={{ fontSize: 12.5 }}>
             {recipe.ingredients.length}
           </span>
@@ -213,7 +213,7 @@ function SingleScroll({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
-        <h4 style={{ margin: 0 }}>Steps</h4>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Steps</h2>
         {recipe.steps.map((s) => (
           <div
             key={s.n}
@@ -314,7 +314,7 @@ function SplitLayout({
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h4 style={{ margin: 0 }}>Ingredients</h4>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Ingredients</h2>
           <span className="text-muted" style={{ fontSize: 12.5 }}>
             {recipe.ingredients.length}
           </span>
@@ -432,7 +432,7 @@ function SplitLayout({
           minWidth: 0,
         }}
       >
-        <h4 style={{ margin: 0 }}>Steps</h4>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Steps</h2>
         {recipe.steps.map((s) => (
           <div
             key={s.n}
