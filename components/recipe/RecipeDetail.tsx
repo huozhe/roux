@@ -7,6 +7,7 @@ import {
   RecipeRemoveDialog,
   type RemoveMode,
 } from "@/components/recipe/RecipeRemoveDialog";
+import { RecipeRemovedScreen } from "@/components/recipe/RecipeRemovedScreen";
 import { RecipeShareDialog } from "@/components/recipe/RecipeShareDialog";
 import { RecipeView } from "@/components/recipe/RecipeView";
 import { recipeApiJson } from "@/components/recipe/recipeApi";
@@ -96,30 +97,7 @@ export function RecipeDetail({
   };
 
   if (removed) {
-    return (
-      <div
-        style={{
-          maxWidth: 780,
-          margin: "0 auto",
-          padding: "35.2px 17.6px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 13.2,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>
-          {removed === "archive" ? "Recipe archived" : "Recipe deleted"}
-        </h2>
-        <p className="text-muted" style={{ margin: 0 }}>
-          {removed === "archive"
-            ? "It’ll sit in Archive for 30 days. You can restore it from the library."
-            : "Gone for good. A later sync won’t re-add this video."}
-        </p>
-        <Link href="/" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
-          Back to Library
-        </Link>
-      </div>
-    );
+    return <RecipeRemovedScreen mode={removed} />;
   }
 
   return (
