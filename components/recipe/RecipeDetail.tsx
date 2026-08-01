@@ -1,59 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { IngredientsList } from "@/components/recipe/IngredientsList";
+import { useCallback, useState } from "react";
+import { RecipeEditor } from "@/components/recipe/RecipeEditor";
+import { RecipeShareDialog } from "@/components/recipe/RecipeShareDialog";
+import { RecipeView } from "@/components/recipe/RecipeView";
+import { recipeApiJson } from "@/components/recipe/recipeApi";
+import { useRecipeEdit } from "@/components/recipe/useRecipeEdit";
+import { useRecipeNotes } from "@/components/recipe/useRecipeNotes";
 import {
   formatCookMinutes,
-  formatTimestamp,
   fullDate,
   relativeAgo,
-  youtubeEmbedUrl,
-  youtubeStepUrl,
   youtubeWatchUrl,
 } from "@/lib/format";
-import { RecipeEditor, type RecipeDraft } from "@/components/recipe/RecipeEditor";
-import { RecipeNotes } from "@/components/recipe/RecipeNotes";
-import { RecipeShareDialog } from "@/components/recipe/RecipeShareDialog";
 import { useLivePrefs } from "@/lib/prefs/client";
 import type { Recipe, UserPrefs } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
 import { useDialogA11y } from "@/lib/ui/useDialogA11y";
 
-
 type RemoveMode = "archive" | "delete" | null;
-
-async function apiJson<T>(
-  url: string,
-  init?: RequestInit,
-): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
-  try {
-    const res = await fetch(url, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-    if (res.status === 204) {
-      return { ok: true, data: undefined as T };
-    }
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      recipe?: Recipe;
-      slug?: string;
-    };
-    if (!res.ok) {
-      return { ok: false, error: body.error ?? `Request failed (${res.status})` };
-    }
-    return { ok: true, data: body as T };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Network error",
-    };
-  }
-}
 
 export function RecipeDetail({
   recipe: initial,
@@ -70,18 +36,30 @@ export function RecipeDetail({
   const livePrefs = useLivePrefs(prefs);
   const showTimestamps = livePrefs.timestamps !== false;
   const layout = livePrefs.layout === "split" ? "split" : "single";
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<RecipeDraft | null>(null);
-  const [notes, setNotes] = useState(recipe.notes ?? "");
-  const [notesStatus, setNotesStatus] = useState("Only you can see these");
+
   const [videoOpen, setVideoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [removed, setRemoved] = useState<RemoveMode>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const notesBaseline = useRef(recipe.notes ?? "");
+
+  const onRecipeUpdate = useCallback((r: Recipe) => setRecipe(r), []);
+  const onError = useCallback((msg: string | null) => setError(msg), []);
+
+  const { notes, notesStatus, onNotesChange } = useRecipeNotes(
+    recipe.id,
+    recipe.notes ?? "",
+    onRecipeUpdate,
+  );
+  const {
+    editing,
+    draft,
+    setDraft,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+  } = useRecipeEdit(recipe, onRecipeUpdate, onError, busy, setBusy);
 
   const closeShare = useCallback(() => setShareOpen(false), []);
   const closeConfirm = useCallback(() => setConfirming(false), []);
@@ -104,56 +82,11 @@ export function RecipeDetail({
     : `${recipe.confidence} confidence`;
   const verifyTagCls = recipe.verified ? "tag tag-neutral" : "tag tag-outline";
 
-  const startEdit = () => {
-    setDraft({
-      title: recipe.title,
-      ingredients: recipe.ingredients.map((i) => ({ ...i })),
-      steps: recipe.steps.map((s) => ({ ...s })),
-    });
-    setEditing(true);
-    setError(null);
-  };
-
-  const cancelEdit = () => {
-    setDraft(null);
-    setEditing(false);
-  };
-
-  const saveEdit = async () => {
-    if (!draft || busy) return;
-    setBusy(true);
-    setError(null);
-    const ingredients = draft.ingredients.map((i) => ({
-      ...i,
-      inferred: false,
-    }));
-    const steps = draft.steps.map((s, i) => ({ ...s, n: i + 1 }));
-    const result = await apiJson<{ recipe: Recipe }>(
-      `/api/recipes/${recipe.id}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          title: draft.title,
-          ingredients,
-          steps,
-        }),
-      },
-    );
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setRecipe(result.data.recipe);
-    setDraft(null);
-    setEditing(false);
-  };
-
   const markVerified = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await apiJson<{ recipe: Recipe }>(
+    const result = await recipeApiJson<{ recipe: Recipe }>(
       `/api/recipes/${recipe.id}/verify`,
       { method: "POST" },
     );
@@ -165,48 +98,11 @@ export function RecipeDetail({
     setRecipe(result.data.recipe);
   };
 
-  const persistNotes = useCallback(
-    async (value: string) => {
-      if (value === notesBaseline.current) return;
-      setNotesStatus("Saving…");
-      const result = await apiJson<{ recipe: Recipe }>(
-        `/api/recipes/${recipe.id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ notes: value || null }),
-        },
-      );
-      if (!result.ok) {
-        setNotesStatus("Couldn’t save notes");
-        return;
-      }
-      notesBaseline.current = value;
-      setRecipe(result.data.recipe);
-      setNotesStatus("Saved to this recipe");
-    },
-    [recipe.id],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (notesTimer.current) clearTimeout(notesTimer.current);
-    };
-  }, []);
-
-  const onNotesChange = (value: string) => {
-    setNotes(value);
-    setNotesStatus("Saving…");
-    if (notesTimer.current) clearTimeout(notesTimer.current);
-    notesTimer.current = setTimeout(() => {
-      void persistNotes(value);
-    }, 600);
-  };
-
   const archiveRecipe = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await apiJson<{ recipe: Recipe }>(
+    const result = await recipeApiJson<{ recipe: Recipe }>(
       `/api/recipes/${recipe.id}/archive`,
       { method: "POST" },
     );
@@ -223,7 +119,7 @@ export function RecipeDetail({
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await apiJson<undefined>(`/api/recipes/${recipe.id}`, {
+    const result = await recipeApiJson<undefined>(`/api/recipes/${recipe.id}`, {
       method: "DELETE",
     });
     setBusy(false);
@@ -433,7 +329,7 @@ export function RecipeDetail({
             }}
           >
             {gone
-              ? "The uploader took this video down, so the link is dead. The write-up, your notes and the timestamps stay — they're yours now. Roux keeps the channel name and the original video title for searching."
+              ? "The uploader took this video down, so the link is dead. The write-up, your notes and the timestamps stay — they\'re yours now. Roux keeps the channel name and the original video title for searching."
               : "You removed this from the playlist, but the recipe stays in your library until you archive it. The video still plays."}
           </div>
           {!isGrantee ? (
@@ -565,509 +461,21 @@ export function RecipeDetail({
             </div>
           )}
 
-          {layout === "split" ? (
-            <SplitLayout
-              recipe={recipe}
-              playable={playable}
-              gone={gone}
-              videoOpen={videoOpen}
-              onToggleVideo={() => setVideoOpen((v) => !v)}
-              notes={notes}
-              onNotes={onNotesChange}
-              notesStatus={notesStatus}
-              showTimestamps={showTimestamps}
-              showNotes={!isGrantee}
-            />
-          ) : (
-            <SingleScroll
-              recipe={recipe}
-              playable={playable}
-              gone={gone}
-              videoOpen={videoOpen}
-              onToggleVideo={() => setVideoOpen((v) => !v)}
-              notes={notes}
-              onNotes={onNotesChange}
-              notesStatus={notesStatus}
-              showTimestamps={showTimestamps}
-              showNotes={!isGrantee}
-            />
-          )}
+          <RecipeView
+            recipe={recipe}
+            layout={layout}
+            playable={playable}
+            gone={gone}
+            videoOpen={videoOpen}
+            onToggleVideo={() => setVideoOpen((v) => !v)}
+            notes={notes}
+            onNotes={onNotesChange}
+            notesStatus={notesStatus}
+            showTimestamps={showTimestamps}
+            showNotes={!isGrantee}
+          />
         </>
       )}
-    </div>
-  );
-}
-
-function StepTimestamp({
-  recipe,
-  gone,
-  tSeconds,
-  showTimestamps,
-}: {
-  recipe: Recipe;
-  gone: boolean;
-  tSeconds: number;
-  showTimestamps: boolean;
-}) {
-  if (gone) {
-    return (
-      <span className="text-muted" style={{ fontSize: 12.5 }}>
-        Was at {formatTimestamp(tSeconds)} — video unavailable
-      </span>
-    );
-  }
-  if (!showTimestamps) return null;
-  return (
-    <a
-      href={youtubeStepUrl(recipe.video_id, tSeconds)}
-      target="_blank"
-      rel="noreferrer"
-      style={{ fontSize: 12.5 }}
-    >
-      Video at {formatTimestamp(tSeconds)}
-    </a>
-  );
-}
-
-function SingleScroll({
-  recipe,
-  playable,
-  gone,
-  videoOpen,
-  onToggleVideo,
-  notes,
-  onNotes,
-  notesStatus,
-  showTimestamps,
-  showNotes = true,
-}: {
-  recipe: Recipe;
-  playable: boolean;
-  gone: boolean;
-  videoOpen: boolean;
-  onToggleVideo: () => void;
-  notes: string;
-  onNotes: (v: string) => void;
-  notesStatus: string;
-  showTimestamps: boolean;
-  showNotes?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 26.4,
-        maxWidth: 780,
-      }}
-    >
-      {playable && (
-        <button
-          type="button"
-          onClick={onToggleVideo}
-          className="card elev-sm"
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 13.2,
-            padding: "10px 17.6px 10px 10px",
-            cursor: "pointer",
-            border: 0,
-            width: "100%",
-            textAlign: "left",
-            fontFamily: "inherit",
-          }}
-        >
-          <span
-            style={{
-              width: 40,
-              height: 40,
-              flex: "none",
-              borderRadius: 999,
-              background: "var(--color-accent)",
-              color: "var(--color-bg)",
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <PlayIcon size={18} />
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-          >
-            <span style={{ fontFamily: "var(--font-heading)", fontSize: 15 }}>
-              {videoOpen ? "Hide video" : "Watch the video"}
-            </span>
-            <span
-              className="text-muted"
-              style={{
-                fontSize: 12,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {recipe.video_title} · {recipe.channel_title}
-            </span>
-          </span>
-          <span
-            style={{
-              flex: "none",
-              display: "grid",
-              transform: videoOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.18s ease",
-            }}
-          >
-            <ChevronDown />
-          </span>
-        </button>
-      )}
-
-      {playable && videoOpen && (
-        <div
-          style={{
-            position: "relative",
-            aspectRatio: "16 / 9",
-            borderRadius: 28,
-            background: "var(--color-neutral-300)",
-            overflow: "hidden",
-            marginTop: -13.2,
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <iframe
-            title={recipe.video_title}
-            src={youtubeEmbedUrl(recipe.video_id)}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              border: 0,
-            }}
-          />
-        </div>
-      )}
-
-      {gone && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 13.2,
-            padding: "13.2px 17.6px",
-            borderRadius: 28,
-            background: "var(--color-neutral-200)",
-            border: "1px dashed var(--color-neutral-400)",
-            color: "var(--color-neutral-700)",
-          }}
-        >
-          <span style={{ flex: "none", display: "grid" }}>
-            <VideoOffIcon size={22} />
-          </span>
-          <span
-            style={{
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-          >
-            <span style={{ fontFamily: "var(--font-heading)", fontSize: 15 }}>
-              Video no longer available
-            </span>
-            <span className="text-muted" style={{ fontSize: 12.5 }}>
-              Was “{recipe.video_title}” by {recipe.channel_title}
-            </span>
-          </span>
-        </div>
-      )}
-
-      <div className="card" style={{ gap: 13.2, padding: 22 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h4 style={{ margin: 0 }}>Ingredients</h4>
-          <span className="text-muted" style={{ fontSize: 12.5 }}>
-            {recipe.ingredients.length}
-          </span>
-        </div>
-        <IngredientsList ingredients={recipe.ingredients} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
-        <h4 style={{ margin: 0 }}>Steps</h4>
-        {recipe.steps.map((s) => (
-          <div
-            key={s.n}
-            style={{
-              display: "flex",
-              gap: 13.2,
-              alignItems: "flex-start",
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                flex: "none",
-                borderRadius: 999,
-                background: "var(--color-accent-200)",
-                color: "var(--color-accent-900)",
-                display: "grid",
-                placeItems: "center",
-                fontWeight: 700,
-                fontSize: 14,
-              }}
-            >
-              {s.n}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                paddingBottom: 13.2,
-              }}
-            >
-              <div
-                style={{ fontSize: 16, lineHeight: 1.5, textWrap: "pretty" }}
-              >
-                {s.text}
-              </div>
-              <StepTimestamp
-                recipe={recipe}
-                gone={gone}
-                tSeconds={s.t_seconds}
-                showTimestamps={showTimestamps}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showNotes ? (
-        <RecipeNotes notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
-      ) : null}
-    </div>
-  );
-}
-
-function SplitLayout({
-  recipe,
-  playable,
-  gone,
-  videoOpen,
-  onToggleVideo,
-  notes,
-  onNotes,
-  notesStatus,
-  showTimestamps,
-  showNotes = true,
-}: {
-  recipe: Recipe;
-  playable: boolean;
-  gone: boolean;
-  videoOpen: boolean;
-  onToggleVideo: () => void;
-  notes: string;
-  onNotes: (v: string) => void;
-  notesStatus: string;
-  showNotes?: boolean;
-  showTimestamps: boolean;
-}) {
-  return (
-    <div
-      className="recipe-split-layout"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(260px, 340px) minmax(0, 1fr)",
-        gap: 26.4,
-        alignItems: "start",
-      }}
-    >
-      <div
-        className="card elev-sm"
-        style={{
-          gap: 13.2,
-          padding: 22,
-          position: "sticky",
-          top: 90,
-          zIndex: 1,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h4 style={{ margin: 0 }}>Ingredients</h4>
-          <span className="text-muted" style={{ fontSize: 12.5 }}>
-            {recipe.ingredients.length}
-          </span>
-        </div>
-        <IngredientsList ingredients={recipe.ingredients} />
-
-        {playable && (
-          <button
-            type="button"
-            onClick={onToggleVideo}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              width: "100%",
-              marginTop: 4,
-              padding: "8px 13.2px 8px 8px",
-              border: "1px solid var(--color-divider)",
-              borderRadius: 999,
-              background: "var(--color-bg)",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              textAlign: "left",
-            }}
-          >
-            <span
-              style={{
-                width: 30,
-                height: 30,
-                flex: "none",
-                borderRadius: 999,
-                background: "var(--color-accent)",
-                color: "var(--color-bg)",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <PlayIcon size={15} />
-            </span>
-            <span
-              style={{
-                flex: 1,
-                fontFamily: "var(--font-heading)",
-                fontSize: 14,
-              }}
-            >
-              {videoOpen ? "Hide video" : "Watch the video"}
-            </span>
-            <span
-              style={{
-                flex: "none",
-                display: "grid",
-                transform: videoOpen ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.18s ease",
-              }}
-            >
-              <ChevronDown />
-            </span>
-          </button>
-        )}
-
-        {playable && videoOpen && (
-          <div
-            style={{
-              position: "relative",
-              aspectRatio: "16 / 9",
-              borderRadius: 20,
-              background: "var(--color-neutral-300)",
-              overflow: "hidden",
-            }}
-          >
-            <iframe
-              title={recipe.video_title}
-              src={youtubeEmbedUrl(recipe.video_id)}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                border: 0,
-              }}
-            />
-          </div>
-        )}
-
-        {gone && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginTop: 4,
-              padding: "10px 13.2px",
-              borderRadius: 20,
-              background: "var(--color-neutral-200)",
-              border: "1px dashed var(--color-neutral-400)",
-              color: "var(--color-neutral-700)",
-            }}
-          >
-            <span style={{ flex: "none", display: "grid" }}>
-              <VideoOffIcon size={18} />
-            </span>
-            <span style={{ fontSize: 12.5 }}>Video no longer available</span>
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 17.6,
-          minWidth: 0,
-        }}
-      >
-        <h4 style={{ margin: 0 }}>Steps</h4>
-        {recipe.steps.map((s) => (
-          <div
-            key={s.n}
-            className="card"
-            style={{
-              flexDirection: "row",
-              gap: 13.2,
-              alignItems: "flex-start",
-              padding: 17.6,
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                flex: "none",
-                borderRadius: 999,
-                background: "var(--color-accent-200)",
-                color: "var(--color-accent-900)",
-                display: "grid",
-                placeItems: "center",
-                fontWeight: 700,
-                fontSize: 14,
-              }}
-            >
-              {s.n}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div
-                style={{ fontSize: 16, lineHeight: 1.5, textWrap: "pretty" }}
-              >
-                {s.text}
-              </div>
-              <StepTimestamp
-                recipe={recipe}
-                gone={gone}
-                tSeconds={s.t_seconds}
-                showTimestamps={showTimestamps}
-              />
-            </div>
-          </div>
-        ))}
-        {showNotes ? (
-          <RecipeNotes notes={notes} onNotes={onNotes} notesStatus={notesStatus} />
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -1081,13 +489,6 @@ function ChevronLeft() {
   );
 }
 
-function ChevronDown() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
 
 function ShareIcon() {
   return (
@@ -1129,11 +530,4 @@ function AlertIcon() {
   );
 }
 
-function PlayIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
-}
 
