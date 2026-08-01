@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  RATE_LIMITS,
+  rateLimitResponse,
+  takeRateLimitMulti,
+} from "@/lib/rate-limit";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   applySelection,
@@ -37,6 +42,21 @@ export async function GET(req: Request) {
 
   try {
     if (refresh) {
+      // SEC-4: YouTube quota is per Google Cloud project — global + per-user.
+      const rl = takeRateLimitMulti([
+        {
+          key: "playlists-refresh:__global__",
+          limit: RATE_LIMITS.playlistsRefresh.global.limit,
+          windowMs: RATE_LIMITS.playlistsRefresh.global.windowMs,
+        },
+        {
+          key: `playlists-refresh:${userId}`,
+          limit: RATE_LIMITS.playlistsRefresh.perUser.limit,
+          windowMs: RATE_LIMITS.playlistsRefresh.perUser.windowMs,
+        },
+      ]);
+      if (!rl.ok) return rateLimitResponse(rl);
+
       const playlists = await refreshUserPlaylists(userId);
       return NextResponse.json({
         playlists,
