@@ -8,10 +8,24 @@ function createDb() {
   return drizzle(neon(url), { schema });
 }
 
+type AppDb = ReturnType<typeof createDb>;
+
 /** Lazy singleton — avoid throwing at import when env is missing (e.g. tsc/build). */
-let _db: ReturnType<typeof createDb> | undefined;
+let _db: AppDb | undefined;
+
+/**
+ * Integration tests (pglite) inject a DB here so queries use in-process Postgres
+ * without a Neon DATABASE_URL. Production code never calls this.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _testDb: any | undefined;
+
+export function setTestDb(db: unknown | null): void {
+  _testDb = db ?? undefined;
+}
 
 export function getDb() {
+  if (_testDb) return _testDb as AppDb;
   if (!_db) _db = createDb();
   return _db;
 }
