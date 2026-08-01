@@ -8,10 +8,11 @@ import { authConfig } from "@/lib/auth.config";
  */
 const { auth } = NextAuth(authConfig);
 
-/** Until Google OAuth env is set, allow fixture UI without login (local/dev). */
+/** Local/dev only: allow fixture UI when OAuth env is missing. Production always fails closed. */
 const authConfigured = Boolean(
   process.env.AUTH_GOOGLE_ID && process.env.AUTH_SECRET,
 );
+const isProduction = process.env.NODE_ENV === "production";
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -25,6 +26,16 @@ export default auth((req) => {
     pathname.startsWith("/api/cron"); // CRON_SECRET checked in route
 
   if (!authConfigured) {
+    // Never fail open in production (missing/rotated env must not publicize routes).
+    if (isProduction) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Auth not configured" },
+          { status: 503 },
+        );
+      }
+      return new NextResponse("Auth not configured", { status: 503 });
+    }
     return NextResponse.next();
   }
 
