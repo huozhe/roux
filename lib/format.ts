@@ -76,11 +76,18 @@ export function slugifyTitle(title: string): string {
     .slice(0, 48);
 }
 
-/** Share slug: title-slug + 4 hex chars. */
-export function makeShareSlug(title: string, randomHex4: string): string {
+/**
+ * Public share slug: title-slug + hex suffix.
+ * New links use 8 hex (SEC-5). Short inputs (tests / old callers) stay 4 hex.
+ * Existing DB slugs keep working (lookup is exact match).
+ */
+export function makeShareSlug(title: string, randomHex: string): string {
   const base = slugifyTitle(title) || "recipe";
-  const hex = randomHex4.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 4);
-  return `${base}-${hex.padEnd(4, "0")}`;
+  const cleaned = randomHex.toLowerCase().replace(/[^0-9a-f]/g, "");
+  if (cleaned.length >= 8) {
+    return `${base}-${cleaned.slice(0, 8)}`;
+  }
+  return `${base}-${cleaned.padEnd(4, "0").slice(0, 4)}`;
 }
 
 export function formatCookMinutes(minutes: number | null): string {

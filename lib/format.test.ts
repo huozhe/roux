@@ -44,8 +44,14 @@ describe("slug", () => {
   it("slugifies titles", () => {
     assert.equal(slugifyTitle("Mapo Tofu!"), "mapo-tofu");
   });
-  it("makes share slug", () => {
+  it("makes share slug (4-hex fixtures still work)", () => {
     assert.equal(makeShareSlug("Mapo Tofu", "a7f3"), "mapo-tofu-a7f3");
+  });
+  it("uses 8 hex when provided (new public links)", () => {
+    assert.equal(
+      makeShareSlug("Mapo Tofu", "a7f3b2c1"),
+      "mapo-tofu-a7f3b2c1",
+    );
   });
 });
 
