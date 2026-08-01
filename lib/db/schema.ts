@@ -109,6 +109,37 @@ export const shareLinks = roux.table("share_links", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
+/**
+ * Inter-user private grants (docs/plans/inter-user-sharing.md).
+ * Separate from public share_links. Read-only for recipient; owner may revoke.
+ * One active grant per (recipe, recipient) — enforced by partial unique index
+ * in migration 0004 (revoked_at IS NULL).
+ */
+export const recipeGrants = roux.table(
+  "recipe_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recipientUserId: uuid("recipient_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("recipe_grants_recipient_idx").on(t.recipientUserId),
+    index("recipe_grants_owner_idx").on(t.ownerUserId),
+    index("recipe_grants_recipe_idx").on(t.recipeId),
+  ],
+);
+
 export const syncRuns = roux.table("sync_runs", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   userId: uuid("user_id")
@@ -174,6 +205,7 @@ export type NewUser = typeof users.$inferInsert;
 export type PlaylistRow = typeof playlists.$inferSelect;
 export type RecipeRow = typeof recipes.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
+export type RecipeGrant = typeof recipeGrants.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type RecipeTombstone = typeof recipeTombstones.$inferSelect;
 export type CaptionSkip = typeof captionSkips.$inferSelect;
