@@ -21,6 +21,9 @@ let _db: AppDb | undefined;
 let _testDb: any | undefined;
 
 export function setTestDb(db: unknown | null): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setTestDb is not available in production");
+  }
   _testDb = db ?? undefined;
 }
 
