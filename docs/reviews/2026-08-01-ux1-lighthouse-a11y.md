@@ -34,3 +34,7 @@ Mobile `/login` local: **100**.
 
 - Full authenticated prod run (OAuth). Fixture UI matches component chrome.
 - Bulk CQ-2 token migration of inline styles (unchanged).
+
+## Recorded non-blocker (review)
+
+`.radio input:checked + .dot` keeps brand `--color-accent` fill (~2.69:1 on `--color-surface`). **Accepted:** not treated as SC 1.4.11 violation — control remains identifiable via border, and checked state is also conveyed by native radio semantics. Soft brand fill retained intentionally.
