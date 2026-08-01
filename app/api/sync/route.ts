@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { resolveAppUserId } from "@/lib/recipes/auth";
 import { runSyncForUser, type SyncProgress } from "@/lib/sync";
 
 export const maxDuration = 300;
@@ -13,7 +14,7 @@ export const maxDuration = 300;
  */
 export async function POST() {
   const session = await auth().catch(() => null);
-  const userId = session?.user?.id;
+  const userId = await resolveAppUserId(session?.user?.id);
   if (!userId) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { RecipeRow } from "@/lib/db/schema";
-import { rowToRecipe } from "./map";
+import {
+  asIngredients,
+  asSteps,
+  rowToRecipe,
+  stripRecipeForPublicShare,
+} from "./map";
 
 function sampleRow(over: Partial<RecipeRow> = {}): RecipeRow {
   return {
@@ -81,4 +86,49 @@ describe("rowToRecipe", () => {
     assert.equal(r.confidence, "medium");
     assert.equal(r.video_status, "ok");
   });
+
+  it("coerces malformed ingredients and steps from jsonb", () => {
+    const r = rowToRecipe(
+      sampleRow({
+        ingredients: [
+          { name: "tofu" },
+          { qty: 1, name: "salt", inferred: 1, group: " aromatics " },
+        ] as never,
+        steps: [{ text: "Boil", t_seconds: "10" }, { n: 9, text: "Serve" }] as never,
+      }),
+    );
+    assert.equal(r.ingredients[0]!.qty, "");
+    assert.equal(r.ingredients[0]!.name, "tofu");
+    assert.equal(r.ingredients[1]!.qty, "");
+    assert.equal(r.ingredients[1]!.inferred, true);
+    assert.equal(r.ingredients[1]!.group, "aromatics");
+    assert.equal(r.steps[0]!.n, 1);
+    assert.equal(r.steps[0]!.t_seconds, 0);
+    assert.equal(r.steps[1]!.n, 9);
+  });
 });
+
+describe("asIngredients / asSteps", () => {
+  it("returns empty arrays for non-arrays", () => {
+    assert.deepEqual(asIngredients(null), []);
+    assert.deepEqual(asSteps(undefined), []);
+  });
+});
+
+describe("stripRecipeForPublicShare", () => {
+  it("strips notes and forces verified false (share privacy)", () => {
+    const privateRecipe = rowToRecipe(
+      sampleRow({ notes: "secret diary", verified: true }),
+    );
+    assert.equal(privateRecipe.notes, "secret diary");
+    assert.equal(privateRecipe.verified, true);
+
+    const pub = stripRecipeForPublicShare(privateRecipe);
+    assert.equal(pub.notes, null);
+    assert.equal(pub.verified, false);
+    assert.equal(pub.title, privateRecipe.title);
+    assert.equal(pub.ingredients.length, privateRecipe.ingredients.length);
+  });
+});
+
+

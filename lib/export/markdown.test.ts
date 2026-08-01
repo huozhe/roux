@@ -53,4 +53,19 @@ describe("recipeToMarkdown", () => {
     const md = recipeToMarkdown({ ...sample, notes: null });
     assert.ok(!md.includes("## Notes"));
   });
+
+  it("emits ingredient group headings when present", () => {
+    const md = recipeToMarkdown({
+      ...sample,
+      ingredients: [
+        { qty: "400 g", name: "soft tofu", inferred: false, group: "Main" },
+        { qty: "1 tbsp", name: "doubanjiang", inferred: false, group: "Sauce" },
+        { qty: "1 tsp", name: "sugar", inferred: false, group: "Sauce" },
+      ],
+    });
+    assert.ok(md.includes("### Main"));
+    assert.ok(md.includes("### Sauce"));
+    assert.ok(md.includes("**400 g** soft tofu"));
+    assert.ok(md.includes("**1 tbsp** doubanjiang"));
+  });
 });

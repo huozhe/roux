@@ -9,8 +9,8 @@ export type ListRecipesOpts = {
 };
 
 /**
- * Prefer live DB when ROUX_DATA=live OR a userId is available (session),
- * and DATABASE_URL is configured. Otherwise fixtures.
+ * Prefer live DB when a userId is available (session) and DATABASE_URL is set.
+ * Otherwise fixtures (local demo without DB).
  */
 async function resolveUserId(opts?: ListRecipesOpts): Promise<string | null> {
   if (opts?.userId) return opts.userId;
@@ -25,9 +25,7 @@ async function resolveUserId(opts?: ListRecipesOpts): Promise<string | null> {
 }
 
 function wantLive(userId: string | null): boolean {
-  if (!process.env.DATABASE_URL) return false;
-  if (process.env.ROUX_DATA === "live") return Boolean(userId);
-  return Boolean(userId);
+  return Boolean(process.env.DATABASE_URL && userId);
 }
 
 export async function listRecipes(

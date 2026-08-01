@@ -26,7 +26,19 @@ export function recipeToMarkdown(recipe: Recipe): string {
 
   lines.push("## Ingredients");
   lines.push("");
+  // Prefer group labels when present (LLM culinary groups).
+  let lastGroup: string | undefined;
+  const anyGroup = recipe.ingredients.some((i) => i.group?.trim());
   for (const ing of recipe.ingredients) {
+    if (anyGroup) {
+      const g = ing.group?.trim() || "Other";
+      if (g !== lastGroup) {
+        if (lastGroup !== undefined) lines.push("");
+        lines.push(`### ${g}`);
+        lines.push("");
+        lastGroup = g;
+      }
+    }
     const qty = formatQty(ing);
     lines.push(`- **${qty}** ${ing.name}`);
   }

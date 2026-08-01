@@ -32,7 +32,7 @@ import type {
   UserPrefs,
 } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
-import { rowToRecipe } from "./map";
+import { rowToRecipe, stripRecipeForPublicShare } from "./map";
 
 function escapeLike(s: string): string {
   return s.replace(/[%_\\]/g, "\\$&");
@@ -502,9 +502,8 @@ export async function getSharedRecipeBySlug(
 
   const row = rows[0];
   if (!row) return null;
-  const recipe = rowToRecipe(row.recipe);
   // Public page never exposes personal notes / verify state.
-  return { ...recipe, notes: null, verified: false };
+  return stripRecipeForPublicShare(rowToRecipe(row.recipe));
 }
 
 function asUserPrefs(v: unknown): UserPrefs {

@@ -132,14 +132,18 @@ describe("extractRecipe", () => {
   it("returns parsed recipe from mock client", async () => {
     const create = mock.fn(async () => ({
       content: [{ type: "text" as const, text: JSON.stringify(validFixture) }],
+      usage: { input_tokens: 100, output_tokens: 50 },
+      stop_reason: "end_turn",
     }));
     const client = { messages: { create } } as never;
 
-    const r = await extractRecipe(mapoCues as CaptionCue[], {
+    const out = await extractRecipe(mapoCues as CaptionCue[], {
       client,
       videoTitle: "REAL Mapo Tofu You NEED",
     });
-    assert.equal(r.title, "Mapo Tofu");
+    assert.equal(out.recipe.title, "Mapo Tofu");
+    assert.equal(out.attempts, 1);
+    assert.equal(out.usage[0]!.input_tokens, 100);
     assert.equal(create.mock.callCount(), 1);
   });
 
@@ -148,18 +152,26 @@ describe("extractRecipe", () => {
     const create = mock.fn(async () => {
       n += 1;
       if (n === 1) {
-        return { content: [{ type: "text" as const, text: "oops not json" }] };
+        return {
+          content: [{ type: "text" as const, text: "oops not json" }],
+          usage: { input_tokens: 10, output_tokens: 5 },
+          stop_reason: "end_turn",
+        };
       }
       return {
         content: [{ type: "text" as const, text: JSON.stringify(validFixture) }],
+        usage: { input_tokens: 20, output_tokens: 40 },
+        stop_reason: "end_turn",
       };
     });
     const client = { messages: { create } } as never;
 
-    const r = await extractRecipe([{ text: "cook tofu", start_seconds: 1 }], {
+    const out = await extractRecipe([{ text: "cook tofu", start_seconds: 1 }], {
       client,
     });
-    assert.equal(r.title, "Mapo Tofu");
+    assert.equal(out.recipe.title, "Mapo Tofu");
+    assert.equal(out.attempts, 2);
+    assert.equal(out.usage.length, 2);
     assert.equal(create.mock.callCount(), 2);
   });
 
