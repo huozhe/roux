@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { RecipeEditor } from "@/components/recipe/RecipeEditor";
+import {
+  RecipeRemoveDialog,
+  type RemoveMode,
+} from "@/components/recipe/RecipeRemoveDialog";
 import { RecipeShareDialog } from "@/components/recipe/RecipeShareDialog";
 import { RecipeView } from "@/components/recipe/RecipeView";
 import { recipeApiJson } from "@/components/recipe/recipeApi";
@@ -17,9 +21,6 @@ import {
 import { useLivePrefs } from "@/lib/prefs/client";
 import type { Recipe, UserPrefs } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
-import { useDialogA11y } from "@/lib/ui/useDialogA11y";
-
-type RemoveMode = "archive" | "delete" | null;
 
 export function RecipeDetail({
   recipe: initial,
@@ -38,14 +39,14 @@ export function RecipeDetail({
   const layout = livePrefs.layout === "split" ? "split" : "single";
 
   const [videoOpen, setVideoOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [removed, setRemoved] = useState<RemoveMode>(null);
+  const [removed, setRemoved] = useState<RemoveMode | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onRecipeUpdate = useCallback((r: Recipe) => setRecipe(r), []);
   const onError = useCallback((msg: string | null) => setError(msg), []);
+  const closeConfirm = useCallback(() => setConfirming(false), []);
 
   const { notes, notesStatus, onNotesChange } = useRecipeNotes(
     recipe.id,
@@ -60,10 +61,6 @@ export function RecipeDetail({
     cancelEdit,
     saveEdit,
   } = useRecipeEdit(recipe, onRecipeUpdate, onError, busy, setBusy);
-
-  const closeShare = useCallback(() => setShareOpen(false), []);
-  const closeConfirm = useCallback(() => setConfirming(false), []);
-  const confirmDialogRef = useDialogA11y(confirming, closeConfirm);
 
   const gone = recipe.video_status === "gone";
   const playable = !gone;
@@ -96,39 +93,6 @@ export function RecipeDetail({
       return;
     }
     setRecipe(result.data.recipe);
-  };
-
-  const archiveRecipe = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    const result = await recipeApiJson<{ recipe: Recipe }>(
-      `/api/recipes/${recipe.id}/archive`,
-      { method: "POST" },
-    );
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setConfirming(false);
-    setRemoved("archive");
-  };
-
-  const deletePermanently = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    const result = await recipeApiJson<undefined>(`/api/recipes/${recipe.id}`, {
-      method: "DELETE",
-    });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    setConfirming(false);
-    setRemoved("delete");
   };
 
   if (removed) {
@@ -256,16 +220,24 @@ export function RecipeDetail({
               >
                 {editing ? "Cancel edit" : "Edit recipe"}
               </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShareOpen(true)}
-                style={{ minHeight: 44 }}
-                disabled={busy}
+              <RecipeShareDialog
+                key={recipe.id}
+                recipe={recipe}
+                onError={(msg) => setError(msg)}
               >
-                <ShareIcon />
-                Share
-              </button>
+                {({ open }) => (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={open}
+                    style={{ minHeight: 44 }}
+                    disabled={busy}
+                  >
+                    <ShareIcon />
+                    Share
+                  </button>
+                )}
+              </RecipeShareDialog>
               <button
                 type="button"
                 className="btn btn-icon btn-secondary"
@@ -345,67 +317,18 @@ export function RecipeDetail({
         </div>
       )}
 
-      {!isGrantee && shareOpen ? (
-        <RecipeShareDialog
-          key={recipe.id}
-          open={shareOpen}
-          recipe={recipe}
-          onClose={closeShare}
+      {!isGrantee ? (
+        <RecipeRemoveDialog
+          open={confirming}
+          recipeId={recipe.id}
+          recipeTitle={recipe.title}
+          busy={busy}
+          setBusy={setBusy}
+          onClose={closeConfirm}
           onError={setError}
+          onRemoved={setRemoved}
         />
       ) : null}
-
-      {confirming && !isGrantee && (
-        <div className="dialog-backdrop" role="presentation" onClick={closeConfirm}>
-          <div
-            ref={confirmDialogRef}
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="remove-dialog-title"
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dialog-title" id="remove-dialog-title">
-              Remove “{recipe.title}”?
-            </div>
-            <div className="dialog-body">
-              Archiving keeps the write-up and your notes for 30 days and stops
-              the next sync from re-adding it. Deleting now is immediate and
-              permanent — if the video is still in the playlist, a later sync
-              would write it up again from scratch.
-            </div>
-            <div className="dialog-actions" style={{ flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={closeConfirm}
-                disabled={busy}
-                style={{ fontFamily: "var(--font-body)", fontSize: 13 }}
-              >
-                Keep it
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => void deletePermanently()}
-                disabled={busy}
-              >
-                Delete permanently
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void archiveRecipe()}
-                disabled={busy}
-                style={{ marginTop: 0 }}
-              >
-                Archive
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {editing && draft && !isGrantee ? (
         <RecipeEditor
@@ -529,5 +452,3 @@ function AlertIcon() {
     </svg>
   );
 }
-
-

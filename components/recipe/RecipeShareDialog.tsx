@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useDialogA11y } from "@/lib/ui/useDialogA11y";
 import type { Recipe } from "@/lib/types";
 
@@ -14,10 +14,10 @@ type OutgoingGrant = {
 };
 
 type Props = {
-  open: boolean;
   recipe: Recipe;
-  onClose: () => void;
   onError?: (message: string) => void;
+  /** Share button (and any other open trigger). Dialog owns open state. */
+  children: (api: { open: () => void }) => ReactNode;
 };
 
 async function apiJson<T>(
@@ -52,15 +52,11 @@ async function apiJson<T>(
 
 /**
  * Share dialog: public link + share with existing Roux user (grants).
- * Extracted from RecipeDetail (CQ-1 seam + grants UI).
+ * Owns open state (CQ-1); parent only provides open trigger via children.
  */
-export function RecipeShareDialog({
-  open,
-  recipe,
-  onClose,
-  onError,
-}: Props) {
-  const onCloseStable = useCallback(() => onClose(), [onClose]);
+export function RecipeShareDialog({ recipe, onError, children }: Props) {
+  const [open, setOpen] = useState(false);
+  const onCloseStable = useCallback(() => setOpen(false), []);
   const panelRef = useDialogA11y(open, onCloseStable);
 
   const [shareSlug, setShareSlug] = useState<string | null>(null);
@@ -109,8 +105,6 @@ export function RecipeShareDialog({
       cancelled = true;
     };
   }, [open, recipe.id, loadGrants, onCloseStable, reportError]);
-
-  if (!open) return null;
 
   const shareUrl =
     typeof window !== "undefined"
@@ -198,6 +192,9 @@ export function RecipeShareDialog({
   }
 
   return (
+    <>
+      {children({ open: () => setOpen(true) })}
+      {open ? (
     <div
       className="dialog-backdrop"
       role="presentation"
@@ -397,5 +394,7 @@ export function RecipeShareDialog({
         </div>
       </div>
     </div>
+      ) : null}
+    </>
   );
 }
