@@ -20,6 +20,16 @@ npm install
 npm run dev
 ```
 
+Enable the repo's git hooks (blocks accidental direct pushes to `main`,
+which auto-deploys to production):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Client-side only — GitHub branch protection needs Pro for private repos.
+`git push --no-verify` overrides it deliberately.
+
 Open [http://localhost:3000/login](http://localhost:3000/login).
 
 ## Scripts
