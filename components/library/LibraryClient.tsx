@@ -14,6 +14,7 @@ import type {
   UserPrefs,
 } from "@/lib/types";
 import { DEFAULT_PREFS } from "@/lib/types";
+import type { GrantedRecipeSummary } from "@/lib/recipes/queries";
 import { RecipeCard } from "./RecipeCard";
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   recipes: Recipe[];
   lastSyncLabel?: string;
   prefs?: UserPrefs;
+  /** Inter-user grants to this user (separate shelf). */
+  sharedWithMe?: GrantedRecipeSummary[];
 };
 
 function defaultDir(sort: SortKey): SortDir {
@@ -31,6 +34,7 @@ export function LibraryClient({
   recipes: initialRecipes,
   lastSyncLabel = "never",
   prefs = DEFAULT_PREFS,
+  sharedWithMe = [],
 }: Props) {
   const [recipes, setRecipes] = useState(initialRecipes);
   const [query, setQuery] = useState("");
@@ -237,6 +241,55 @@ export function LibraryClient({
           />
         </div>
       </div>
+
+      {/* Shared with me (inter-user grants) */}
+      {sharedWithMe.length > 0 && view === "library" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 13.2 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h4 style={{ margin: 0 }}>Shared with me</h4>
+            <div className="tag tag-neutral">
+              {sharedWithMe.length} recipe{sharedWithMe.length === 1 ? "" : "s"}
+            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: 13.2,
+            }}
+          >
+            {sharedWithMe.map((g) => (
+              <a
+                key={g.grantId}
+                href={`/recipes/${g.recipeId}`}
+                className="card elev-sm"
+                style={{
+                  padding: 14,
+                  gap: 8,
+                  textDecoration: "none",
+                  color: "inherit",
+                  minHeight: 100,
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 16 }}>{g.title}</div>
+                <div className="text-muted" style={{ fontSize: 12.5 }}>
+                  from {g.ownerName ?? g.ownerEmail}
+                </div>
+                {(g.cuisine || g.mainIngredient) && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {g.cuisine ? (
+                      <span className="tag tag-outline">{g.cuisine}</span>
+                    ) : null}
+                    {g.mainIngredient ? (
+                      <span className="tag tag-outline">{g.mainIngredient}</span>
+                    ) : null}
+                  </div>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Newly added shelf (hidden when newShelf pref is false) */}
       {showNewShelf && newShelfRecipes.length > 0 ? (
