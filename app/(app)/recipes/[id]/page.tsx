@@ -20,13 +20,15 @@ export default async function RecipePage({
   const session = await auth().catch(() => null);
   const userId = await resolveAppUserId(session?.user?.id);
 
-  // Fixture / no-DB demo path
-  if (!userId || !process.env.DATABASE_URL) {
+  // Fixture demo only when there is no database — never when DB is configured.
+  if (!process.env.DATABASE_URL) {
     const { getRecipe } = await import("@/lib/data/recipes");
     const recipe = await getRecipe(id);
     if (!recipe) notFound();
     return <RecipeDetail recipe={recipe} prefs={DEFAULT_PREFS} role="owner" />;
   }
+
+  if (!userId) notFound();
 
   let prefs = DEFAULT_PREFS;
   try {
