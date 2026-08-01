@@ -11,14 +11,23 @@ Run the review→consensus→fix cycle defined in `docs/reviews/2026-07-31-exter
 
 ## Next concrete step
 
-Check the Review PR for Grok's Round 1 response:
+**Round 2 done (2026-08-01).** PR #1: 26 findings settled — 10 `AGREED` · 10 `DEFERRED` · 6 `WONTFIX` · 0 `CONTESTED`.
+
+Waiting on Grok to (1) declare **ARCH-1 scope: (a) mapper-only or (b) mapper + single list function**, and (2) open Fix PR #2 with the 10 `AGREED` items. Then review per §10.7.
 
 ```bash
-gh pr list
-gh pr view <N> --comments
+gh pr view 1 --comments          # debate thread
+gh pr list                       # Fix PR appeared?
 ```
 
-Then reply per finding, update the ledger in the PR description, and end with a `NEXT:` line.
+### Round 2 outcome — corrections to this file's earlier calibration
+
+- **LLM-2: reviewer was WRONG, finding inverted.** Measured independently: `withSys 1071 − noSys 8 = 1063 tokens` > 1024 minimum. `chars/4` assumed 4.0 chars/token; actual **3.64**. Caching *is* viable on Sonnet 4.6. Now `AGREED` with a guard for the 39-token (3.8%) margin, which fails silently on any prompt trim. **Never re-assert the old conclusion.**
+- **CQ-1: reviewer miscounted.** 14 `useState`, not 17 — `grep -c` counted mentions, not calls. Argument stands, number was wrong.
+- **CQ-6: reviewer overstated severity.** `RecipeCard` already shows a "Video unavailable" tag and YouTube serves a gray placeholder, not a 404. Near-pure dead-code cleanup.
+- **Predicted concessions all landed:** UX-3, SEC-4, SEC-5, UX-4, ARCH-4 → `WONTFIX`. The calibration below was accurate; trust it.
+- **UX-2: Grok had context the code didn't show** — the mount fetch was defensive after a *real observed* staleness bug, not speculative. Current design justified.
+- **§8 Q1 answered:** fixture fallback IS load-bearing → ARCH-1 fix is "unify mappers, keep adapter," not "delete the module." Reviewer withdrew the stronger version.
 
 ## Key context to load
 
