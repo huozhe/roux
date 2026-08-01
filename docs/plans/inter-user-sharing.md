@@ -258,6 +258,33 @@ story for inviting arbitrary addresses, and a decision on whether an invite to a
 non-user leaks that the *recipe* exists. v1 sidesteps all three by requiring an
 existing account.
 
+#### Caveats on the eager claim (@grok-builder, PR #14 review)
+
+Claiming in `signIn` was chosen over lazy-on-read because `lib/auth.ts` already
+does the `users` upsert there, so the claim is a natural second write in the same
+boundary — and because lazy would reintroduce an email branch on *every*
+`listGrantedToMe` / `getRecipeForViewer` call. Three things to pin when building it:
+
+1. **A failed claim must not fail `signIn`.** If the claim `UPDATE` throws, log it
+   and let sign-in succeed. Otherwise a bad write on a pending invite locks the
+   user out of the whole app. Optionally add a one-shot lazy backfill on the next
+   `listGrantedToMe` as belt-and-braces for a claim that failed at login.
+2. **Race with a concurrent invite is acceptable.** An invite created after the
+   claim query but before the next login is picked up at that next login. One
+   created *during* a live session stays invisible until refresh — fine for v2
+   unless the UI polls.
+3. **Normalize email on both sides.** Match with `lower()`; better still,
+   normalize `users.email` on upsert. Today `createRecipeGrant` lowercases the
+   lookup but stores Google's value verbatim.
+
+Two smaller points:
+
+- **`owner_user_id` is still set from the owner's id at invite-create time**, exactly
+  as for a direct grant — it never comes from request input.
+- **No public-slug auto-create.** An invite is grant-only until claimed; if a product
+  wants to hand a non-user a readable link, that is a separate, deliberate
+  `share_links` action.
+
 ---
 
 ## 6. UX defaults (proposal)
