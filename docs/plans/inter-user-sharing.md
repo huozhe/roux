@@ -1,11 +1,11 @@
 # Inter-user recipe sharing — design
 
-**Status:** draft for review (round-2 item 3 on #3)  
+**Status:** **ACCEPTED** (2026-08-01) — implementation may proceed on §7  
 **Date:** 2026-08-01  
 **Author:** @grok-builder  
 **Reviewer:** @claude-reviewer · product calls: @owner  
 
-This doc gates implementation. **No share schema or route changes land until this is accepted.**
+Design accepted after PR #7 review. Owner rulings and reviewer addenda are folded into §§4, 8, and 10 below.
 
 ---
 
@@ -105,15 +105,21 @@ On share, insert a recipe row for B pointing at same video / frozen extract.
 
 **Visibility matrix for a recipe row R owned by A:**
 
-| Viewer | Can read R? | Notes / verified |
-|---|---|---|
-| A (owner) | Yes | Full |
-| B with active grant | Yes | **Stripped** (same as public) |
-| B without grant | No (404) | — |
-| Anon with valid slug | Yes via `/r/[slug]` | Stripped |
-| Anon without slug | No | — |
+| Viewer | R active | A archives R | A soft-deletes R |
+|---|---|---|---|
+| A (owner) | Full (notes/verified) | Still full (in archive view) | Gone |
+| B with active grant | Stripped read | **No access** (grant row stays; unarchive restores) | **No access** |
+| B without grant | No | No | No |
+| Anon + valid public slug | Stripped read | **Still readable** (link = publish, not live library) | No |
+| Anon without slug | No | No | No |
 
-Strip rule reuses `stripRecipeForPublicShare` (already tested).
+**Deliberate asymmetry (pinned):** public slug does **not** filter `archived_at` (current `getSharedRecipeBySlug` behavior — keep). Grants **do** hide archived recipes. Rationale: a public link is *published* (breaking an already-sent URL is surprising; archive means “declutter my library”). A grant is a *live view into my library*, so archive withdraws it. **Do not “fix” this inconsistency without reopening this doc.**
+
+- **Archive is hide, not revoke.** Leave `recipe_grants` row active (`revoked_at` null). Unarchive restores grantee access without re-granting. Test: grant → archive → grantee 404 → unarchive → grantee reads again.
+- **Soft-delete** (`deleted_at`): grant path filters it (same as slug path). Prefer cascade/cleanup of grants on hard delete via FK.
+- Strip rule reuses `stripRecipeForPublicShare` (already tested) for grantees and public.
+
+**Read API shape (reviewer #1):** add **`getRecipeForViewer(viewerId, id)`** as a **new** function. Keep **`getRecipe` owner-only** (current `owned()` predicate) so write paths that “get then mutate” cannot silently pick up grantee rows. Greppable and opt-in at each call site.
 
 ### 4.2 Product surfaces
 
@@ -130,9 +136,9 @@ Strip rule reuses `stripRecipeForPublicShare` (already tested).
 - New library section or tab: **Shared with me** (not mixed into “My recipes” by default — avoids sync confusion).
 - Opens recipe detail in **read-only** mode (no edit / archive / verify / notes write).
 - Cook mode allowed (read-only steps + timestamps).
-- Optional: deep link `/recipes/shared/[grantId]` or `/recipes/[id]` with authz that allows owner **or** grantee.
+- URL: keep `/recipes/[id]` for both; detail uses **`getRecipeForViewer`**. Library home lists **only owned** rows; “Shared with me” uses **`listGrantedToMe(viewerId)`** (must also filter archived + deleted).
 
-**Recommendation for URL:** keep `/recipes/[id]` for both; `getRecipe` becomes `getRecipeForViewer(viewerId, id)` that succeeds if owner **or** active grantee. Library home still lists only owned rows; “Shared with me” uses `listGrantedToMe(viewerId)`.
+**List / export (reviewer #3):** `GET /api/recipes` and library export remain **owner-only**. Granted recipes are not “my cookbook.” Do not “fix” list/export to include grants without reopening this doc — detail-read vs list-own is intentional.
 
 ### 4.3 API sketch
 
@@ -141,7 +147,7 @@ Strip rule reuses `stripRecipeForPublicShare` (already tested).
 | `POST` | `/api/recipes/:id/grants` | Body `{ email }` or `{ userId }`. Owner only. Creates grant. 404 if not owner; 404 if recipient unknown (no user enumeration via different errors — use same 404 for unknown email). |
 | `GET` | `/api/recipes/shared` | List grants to me (recipe summary, owner name). |
 | `DELETE` | `/api/recipes/:id/grants/:grantId` | Owner revokes. |
-| `GET` | `/api/recipes/:id` | Owner or grantee; grantee payload stripped. |
+| `GET` | `/api/recipes/:id` | Via `getRecipeForViewer`; owner full / grantee stripped; 404 if archived for grantee. |
 
 Existing:
 
@@ -154,26 +160,37 @@ Existing:
 ### 4.4 Authz predicates (must be in pglite suite)
 
 ```
-canReadRecipe(viewer, recipe) :=
-  recipe.user_id = viewer
-  OR exists grant (recipe_id, recipient=viewer, revoked_at is null)
-  OR (public slug path — separate, no session)
+canReadRecipeAsViewer(viewer, recipe) :=
+  recipe.deleted_at is null
+  AND (
+    recipe.user_id = viewer                                    -- owner: archive ok via own views
+    OR (
+      exists grant (recipe_id, recipient=viewer, revoked_at is null)
+      AND recipe.archived_at is null                           -- grantee: no archived
+    )
+  )
 
 canWriteRecipe(viewer, recipe) :=
-  recipe.user_id = viewer   -- grants never write
+  recipe.user_id = viewer AND deleted_at is null   -- grants never write; use getRecipe/owned()
 
 canManageGrants(viewer, recipe) :=
   recipe.user_id = viewer
 ```
 
+Public slug path stays separate (sessionless); does not use `canReadRecipeAsViewer`.
+
 **Cross-user tests to add when implementing:**
 
-- A grants B → B can `getRecipe`, A still full notes  
+- A grants B → B `getRecipeForViewer` ok (stripped); A still full notes via `getRecipe`  
 - B cannot patch/archive/delete/verify A’s recipe  
-- A revokes → B getRecipe null  
+- A revokes → B null  
+- A archives (grant intact) → B null; A unarchives → B reads again  
+- A soft-deletes → B null  
+- Public slug still reads archived R (asymmetry test)  
 - C cannot use B’s grant  
-- List “shared with me” only B’s grants  
-- Unknown email on create → same 404 shape as not-owner (no oracle)
+- `listGrantedToMe` excludes archived/deleted  
+- List/export endpoints never return granted rows  
+- Unknown email on create → **same 404** as not-owner (no enumeration oracle)
 
 ### 4.5 SEC-5 (public slug)
 
@@ -194,17 +211,13 @@ Add when routes land:
 
 ---
 
-## 5. Invite / recipient resolution (open product call)
+## 5. Invite / recipient resolution — **DECIDED**
 
-v1 recommendation: **recipient must already have a Roux account** (row in `roux.users` from Google sign-in).
+**D2 (owner, 2026-08-01): Existing Roux users only.** No email invites, no pending grants, no mail dependency for v1.
 
-| Approach | Pros | Cons |
-|---|---|---|
-| **Existing users only (v1)** | Simple, no email infra | A must tell B to sign in first |
-| Email invite + pending grant | Better UX | Needs email provider, token, abuse controls |
-| Share by Google `sub` / email claim | Aligns with Auth.js | Still need user row for FK |
+Create-grant resolves email → `users` row. If none: **same 404 as not-owner** (no user-enumeration oracle). Owner tells recipient to sign in with Google first if needed.
 
-**Ask @owner:** Is “recipient must already use Roux” acceptable for first ship?
+(Email-invite / pending-grant designs may be revisited later; not in v1 scope.)
 
 ---
 
@@ -222,7 +235,7 @@ v1 recommendation: **recipient must already have a Roux account** (row in `roux.
 | Step | Work | PR shape |
 |---|---|---|
 | 1 | Migration `recipe_grants` + Drizzle schema + pglite DDL + drift note | one PR |
-| 2 | Query layer: create/list/revoke grant, `getRecipeForViewer`, strip for grantee | + pglite authz tests |
+| 2 | Query layer: create/list/revoke grant, **new** `getRecipeForViewer` (keep `getRecipe` owner-only), `listGrantedToMe` filters archive/delete | + pglite authz tests |
 | 3 | API routes + rate limits | thin |
 | 4 | UI: share dialog “Share with…”, Shared shelf, read-only detail | after 2–3 |
 | 5 | Optional: SEC-5 8-hex for new public slugs | small, can ride with 3 |
@@ -231,17 +244,21 @@ Do **not** start multi-user onboarding / admin until grants work.
 
 ---
 
-## 8. Explicit decisions to confirm
+## 8. Decisions — **settled**
 
-| # | Decision | Proposal | Owner |
+| # | Decision | Ruling | Source |
 |---|---|---|---|
-| D1 | Model | Separate `recipe_grants` table | review |
-| D2 | Recipient v1 | Existing Roux users only | **@owner** |
-| D3 | Permission | Read-only for recipient | review |
-| D4 | Library UX | Separate “Shared with me” shelf | review |
-| D5 | Public slugs | Keep optional; raise entropy on next touch | review |
-| D6 | Notes/verified | Never to grantee or public | already product law |
-| D7 | Collaborative edit | Out of scope v1 | review |
+| D1 | Model | Separate `recipe_grants` table | accepted |
+| D2 | Recipient v1 | **Existing Roux users only** (no email invite) | **@owner** |
+| D3 | Permission | Read-only for recipient | accepted |
+| D4 | Library UX | Separate “Shared with me” shelf | accepted |
+| D5 | Public slugs | Keep optional; raise entropy on next touch | accepted |
+| D6 | Notes/verified | Never to grantee or public | product law |
+| D7 | Collaborative edit | Out of scope v1 | accepted |
+| D8 | Archived + grant | **Hidden from grantees**; grant row not revoked | **@owner** |
+| D9 | Archived + public slug | **Still readable** (asymmetry intentional) | review + @owner |
+| D10 | Read helper | `getRecipeForViewer` new; `getRecipe` stays owner-only | @claude-reviewer |
+| D11 | List/export | Owner-only; grants not included | @claude-reviewer |
 
 ---
 
@@ -253,16 +270,14 @@ Do **not** start multi-user onboarding / admin until grants work.
 
 ---
 
-## 10. Acceptance of this doc
+## 10. Acceptance — **met (2026-08-01)**
 
-This design is accepted when:
+1. @claude-reviewer: no blocking objections (PR #7).  
+2. @owner: D2 existing users only; archived hidden from grantees.  
+3. §8 settled including D8–D11.
 
-1. @claude-reviewer has no blocking objections (or they are resolved in-thread).  
-2. @owner confirms **D2** (existing users only vs email invite).  
-3. Checklist in §8 is either agreed or explicitly overridden.
-
-Then implementers open PRs per §7 only.
+Implementers open PRs per §7. **CQ-1 (split RecipeDetail) before or with share-dialog UI** (step 4).
 
 ---
 
-NEXT: @claude-reviewer + @owner — confirm D1–D7, especially D2.
+NEXT: @grok-builder — §7 step 1 (migration + schema + pglite DDL).
