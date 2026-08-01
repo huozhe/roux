@@ -1,11 +1,13 @@
 # Local ASR for caption-less videos (whisper.cpp)
 
-**Status:** **DRAFT** — awaiting @claude-reviewer  
+**Status:** **REVISED** — Claude deltas folded; @owner rulings in §8 · awaiting final @claude-reviewer ack  
 **Date:** 2026-08-01  
 **Author:** @grok-builder  
 **Reviewer:** @claude-reviewer · product calls: @owner  
 
 Related: `lib/youtube/transcript.ts`, `lib/sync/caption-skips.ts`, `lib/sync/run.ts`, extract path (`CaptionCue[]` → Claude).
+
+**Review history:** draft PR #21 · @claude-reviewer sound + D1/D2 blocking deltas · @owner answered Q1/Q2/D4 and related product calls (2026-08-01).
 
 ---
 
@@ -20,6 +22,8 @@ Sync already distinguishes caption failures:
 | `unavailable` / etc. | Dead / empty body | Skip |
 
 **Product reality (owner):** a large share of library videos are **`no_captions`**, still have **audio**, and are **Chinese**. Uploaders explicitly disabled captions/ASR. There is no YouTube track to fetch; audio ASR is the only way to feed the existing recipe extract pipeline.
+
+**Scale today:** on the order of **~55** `no_captions` skips already stored — the feature exists to clear that backlog, not only newly discovered videos (see §4.7 / Claude D1).
 
 Roux’s extract is already caption-agnostic: it only needs timed text:
 
@@ -38,11 +42,12 @@ So ASR is a **transcript acquisition** problem, not a new extract architecture.
 
 1. When YouTube returns **`no_captions`**, optionally produce `CaptionCue[]` from **audio** and continue the normal extract path.
 2. Run **only on the local sync machine** (same constraint class as “no `YOUTUBE_COOKIES` on Vercel” / residential network). **Never** on Vercel serverless.
-3. Support **Chinese** speech well enough for cooking narration (Mandarin primary).
+3. Support **Chinese** speech well enough for cooking narration (Mandarin primary); language selection per §4.3.
 4. **Zero paid ASR API** for the default path — **whisper.cpp** (or equivalent local Whisper) is free after model download.
-5. **Idempotent:** do not re-download + re-transcribe the same `video_id` every sync.
+5. **Idempotent:** do not re-download + re-transcribe the same `(videoId, engine, model, lang)` every sync.
 6. Preserve cook-mode usefulness: cues must carry **timestamps** (Whisper segments are enough; not frame-perfect).
-7. Clear UX: user can see “written from audio ASR” vs YouTube captions; confidence defaults remain honest.
+7. Clear progress UX so multi-minute Whisper is not mistaken for a hang.
+8. **Backlog-capable:** existing `caption_skips` rows with `kind = no_captions` must be eligible when ASR is on (not only brand-new playlist items).
 
 ### Non-goals (v1)
 
@@ -53,6 +58,7 @@ So ASR is a **transcript acquisition** problem, not a new extract architecture.
 - Replacing caption fetch when tracks **exist** (captions remain preferred)  
 - Auto-ASR for `auth_blocked` (wrong fix — fix cookies/local fetch first)  
 - Perfect ingredient spelling without the Claude extract step  
+- Separate `--asr-backfill` queue (v1 uses the same `maxNew` budget — see §4.7)
 
 ---
 
@@ -60,31 +66,25 @@ So ASR is a **transcript acquisition** problem, not a new extract architecture.
 
 ### A — OpenAI Whisper API (or other hosted STT)
 
-Upload audio → timed transcript.
-
 **Pros:** simple ops, good Chinese.  
-**Cons:** per-minute cost; still need **local audio download** from YouTube; API key + data leave machine; conflicts with “local-only free” preference.
+**Cons:** per-minute cost; still need local audio download; conflicts with free local preference.
 
 ### B — Multimodal LLM on video/audio
 
-Send media to Claude/Gemini; ask for recipe or transcript.
-
-**Pros:** one vendor for extract.  
-**Cons:** expensive for full cooking videos; weaker timed step map; different failure modes; still need media fetch; not free.
+**Cons:** expensive; weaker timed step map; not free.
 
 ### C — Local **yt-dlp** audio + **whisper.cpp** → `CaptionCue[]` (**recommended**)
 
 ```
-no_captions → yt-dlp -x → whisper.cpp -l zh → cues → extractRecipe (unchanged)
+no_captions → yt-dlp -x → whisper.cpp → cues → extractRecipe (unchanged)
 ```
 
-**Pros:** $0/video after model install; Chinese works (`-l zh`, medium/large models); timestamps from segments; fits laptop sync; extract/prompt untouched.  
-**Cons:** user installs deps; CPU/GPU time; disk for models + cache; YouTube download ToS/fragility (same class as caption scrape).
+**Pros:** $0/video after model install; Chinese works; timestamps; laptop sync; extract untouched.  
+**Cons:** user installs deps; CPU time; disk cache; YT download fragility.
 
-### D — Do nothing; leave `caption_skips`
+### D — Do nothing
 
-**Pros:** zero work.  
-**Cons:** permanent hole for CN cooking channels that disable captions — large % of owner’s library.
+**Cons:** permanent hole for CN channels that disable captions.
 
 **Recommendation: C.**
 
@@ -104,8 +104,11 @@ no_captions → yt-dlp -x → whisper.cpp -l zh → cues → extractRecipe (unch
   ASR enabled? ──no──► caption_skips (unchanged)
        │ yes
        ▼
+  duration ≤ max? ──no──► skip (asr_too_long); keep/record skip
+       │ yes
+       ▼
   ┌─────────────────────┐
-  │ asrFromAudio(videoId)│  local only
+  │ asrFromAudio(videoId)│  local only · execFile args array
   │  yt-dlp + whisper   │
   └─────────┬───────────┘
             ▼
@@ -114,213 +117,302 @@ no_captions → yt-dlp -x → whisper.cpp -l zh → cues → extractRecipe (unch
        extractRecipe (same)
 ```
 
-**Invariant:** cloud `/api/sync` and cron **never** call ASR. Only `npm run sync` (or a dedicated local CLI) with ASR flag/env may.
+**Invariant:** cloud `/api/sync` and cron **never** call ASR. Only `npm run sync` with ASR flag/env may.
 
 ### 4.2 Runtime dependencies (local machine)
 
 | Tool | Role | Notes |
 |---|---|---|
-| **yt-dlp** | Download best audio for `video_id` | Already the de-facto local YT tool; user-installed |
+| **yt-dlp** | Download best audio for `video_id` | User-installed |
 | **whisper.cpp** | Speech → timed segments | Free; Metal on Apple Silicon |
-| **Model** | `ggml-medium` default; `large-v3` / `large-v3-turbo` optional | Free download; medium is CN cooking sweet spot |
+| **Model** | `ggml-medium` default; `large-v3-turbo` optional | Free download |
 
-Detection: if binaries/models missing and ASR requested → clear error (“install yt-dlp + whisper.cpp + model”), not silent skip.
+Detection: if binaries/models missing and ASR requested → **fail fast at sync start** with install instructions.
 
-**Alternatives allowed later without redesign:** faster-whisper / mlx-whisper as drop-in **engines** behind the same `asrFromAudio` interface, as long as output is `CaptionCue[]`.
+**Subprocess safety (Claude Q3):** shell out via **`execFile` / `spawn` with an argument array only** — never interpolate `videoId` into a shell string. Engine stays pluggable (faster-whisper / mlx-whisper later) behind the same `asrFromAudio` interface.
 
-### 4.3 Language
+### 4.3 Language — **@owner ruling**
 
 | Case | Behavior |
 |---|---|
-| Default for owner library | **`zh`** (product: large % Chinese, captions off) |
-| Override | Env `ROUX_ASR_LANGUAGE=zh|en|auto` or sync flag `--asr-lang=` |
-| `auto` | Whisper language detect (slower / less reliable for short intros) |
+| **Default** | If title or channel contains **CJK** → **`zh`**; else **`auto`** (Whisper detect) |
+| Override | Env `ROUX_ASR_LANGUAGE=zh\|en\|auto` or `--asr-lang=` (forces all videos) |
+| Translate mode | **Not** used in v1 (`-tr` off). Keep source language text; extract prompt structures into English recipe when practical |
 
-**Do not** default to English Whisper translate mode (`-tr`) in v1. Keep Chinese (or detected) text; existing extract prompt already asks for English recipe content when practical.
+CJK check: any codepoint in common CJK ranges in `videoTitle` or `channelTitle` (playlist item metadata already available in sync).
 
 ### 4.4 Cue mapping
 
 Whisper segment → cue:
 
 ```ts
-{ text: segment.text.trim(), start_seconds: Math.floor(segment.t0) }
-// or t0 in seconds from whisper.cpp json output
+{ text: segment.text.trim(), start_seconds: Math.floor(segment.t0Seconds) }
 ```
 
-Drop empty segments. Optional: merge sub-second fragments. Cap total cue text if needed (extract already handles long transcripts via MAX_TOKENS / retries).
+Drop empty segments. Optional: merge sub-second fragments.
 
-### 4.5 Caching (idempotency)
+### 4.5 Caching (idempotency) — **Claude D2**
 
-**Problem:** ASR is slow (minutes per video). Must not re-run every sync.
-
-**Recommended: filesystem cache on the sync machine** (v1 — simple, no migration):
+ASR is slow. Cache on the sync machine (v1 — no DB migration):
 
 ```
 $ROUX_ASR_CACHE_DIR/   # default: ~/.cache/roux/asr/
-  {videoId}.json       # { cues, language, model, engine, createdAt }
-  {videoId}.m4a        # optional: keep audio only if ROUX_ASR_KEEP_AUDIO=1
+  {videoId}.json       # single file per video; body includes identity fields
+  {videoId}.m4a        # optional if ROUX_ASR_KEEP_AUDIO=1
 ```
 
-Sync flow:
+**Cache file body:**
 
-1. Cache hit → load cues, skip download/ASR  
-2. Cache miss → yt-dlp → whisper → write cache → cues  
+```ts
+{
+  videoId: string;
+  engine: "whisper.cpp";  // or later engines
+  model: string;          // e.g. "medium", "large-v3-turbo"
+  language: string;       // resolved lang used for the run: "zh" | "en" | ...
+  cues: CaptionCue[];
+  createdAt: string;      // ISO
+}
+```
 
-**Optional later (v1.1):** persist `transcript_source` + cue blob in Postgres so multi-machine sync shares work — **not required** for single-owner laptop sync.
+**Lookup rule (preferred over filename triple):**
+
+1. Read `{videoId}.json` if present.  
+2. If `engine`, `model`, and `language` all match the **current** run config → **hit**.  
+3. Else → **miss** (re-run ASR; overwrite file).  
+
+This keeps one visible file per video while avoiding silent wrong-language reuse.
+
+Default model id for cache identity: whatever CLI/`ROUX_ASR_MODEL` selects (default `medium`).
 
 ### 4.6 When ASR runs
-
-Strict gate so we don’t burn CPU on the wrong failures:
 
 | Condition | ASR? |
 |---|---|
 | Caption fetch **ok** | No |
-| `auth_blocked` / captcha | **No** (fix access first) |
+| `auth_blocked` / captcha | **No** |
 | `unavailable` | No |
-| `no_captions` + ASR enabled | **Yes** |
-| `empty_body` with tracks listed | **No** in v1 (ambiguous; log; may revisit) |
-| Video already in `caption_skips` as `no_captions` + ASR enabled | **Yes once** (or “retry ASR” CLI) — success removes skip / writes recipe |
+| `empty_body` | **No** in v1 |
+| `no_captions` + ASR enabled + duration ≤ max | **Yes** |
+| Already in `caption_skips` as **`no_captions`** + ASR enabled | **Yes** (backlog — see §4.7) |
+| `no_captions` + duration **> max** | No; record `asr_too_long` (do not spin forever) |
 
-**Default ASR enablement (proposal for owner):**
+**Enablement — @owner ruling:** **opt-in only**
 
-- Env `ROUX_ASR=1` or CLI `npm run sync -- --asr`  
-- **Off by default** so CI/dev without models don’t hang  
+- `ROUX_ASR=1` or `npm run sync -- --asr`  
+- **Off by default** (even if binaries exist)  
 - When off, behavior identical to today  
 
-### 4.7 Sync integration (`lib/sync/run.ts`)
+**Max duration — @owner ruling:** **45 minutes**. Source duration from playlist/video metadata when available; if unknown, attempt ASR (don’t block the whole backlog on missing duration).
 
-Pseudo-flow at the current `fetchTranscriptDetailed` call site:
+### 4.7 Sync integration (`lib/sync/run.ts`) — **Claude D1 (critical)**
 
+#### Candidate-loop gate (today vs required)
+
+**Today** (~`:249`):
+
+```ts
+if (captionSkipSet.has(item.videoId)) continue;
 ```
+
+This **drops the entire `no_captions` backlog** before transcript/ASR. As drawn in the first draft, ASR would only fire for *new* caption-less videos — silent “no change” for the 55 already skipped.
+
+**Required:** `listCaptionSkipVideoIds` (or a sibling) must expose **kind**, not only id. e.g. `Map<videoId, CaptionSkipKind>` or `listCaptionSkips` already returns kinds — use that in the candidate loop:
+
+```ts
+const skipKind = captionSkipById.get(item.videoId);
+if (skipKind) {
+  const allowAsrBacklog =
+    asrEnabled && skipKind === "no_captions";
+  if (!allowAsrBacklog) continue;
+}
+// else: new item or eligible no_captions backlog → proceed
+```
+
+`auth_blocked` / `unavailable` skips **still** short-circuit (never ASR).
+
+**Signature change to name in impl:** prefer reusing `listCaptionSkips` → build `Map`, or change `listCaptionSkipVideoIds` to return `{ videoId, kind }[]`. Do not keep an id-only set if ASR is enabled.
+
+#### After caption fetch
+
+```ts
 const transcript = await fetchTranscriptDetailed(videoId);
-if (transcript.ok) { cues = transcript.cues; source = "youtube"; }
-else if (transcript.kind === "no_captions" && asrEnabled) {
-  const asr = await asrFromAudio(videoId, { language });
-  if (!asr.ok) { skip + maybe asr_failed detail; continue; }
+if (transcript.ok) {
+  cues = transcript.cues; source = "youtube";
+} else if (transcript.kind === "no_captions" && asrEnabled) {
+  if (durationKnown && durationMin > ASR_MAX_MINUTES) {
+    // skip; detail asr_too_long; upsert caption_skip no_captions
+    continue;
+  }
+  const lang = resolveAsrLanguage(videoTitle, channelTitle, langOverride);
+  const asr = await asrFromAudio(videoId, { language: lang, model });
+  if (!asr.ok) { /* detail; keep no_captions skip */ continue; }
   cues = asr.cues; source = "asr";
-  // do not leave no_captions skip blocking forever if ASR succeeded
-} else { existing skip path }
+} else {
+  // existing skip + caption_skips path
+  continue;
+}
 // extractRecipe(cues) unchanged
 ```
 
-**Budget:** ASR videos **do** count toward `maxNew` / extract budget (they spend Anthropic). Caption *fetch* failures still must not burn extract budget; ASR *success* then extract is a normal write.
+For **backlog** items that were skip-gated through without re-fetching captions: when `allowAsrBacklog`, either:
 
-**Progress UI:** stages like `Downloading audio…` / `Transcribing (whisper)…` so a 10‑minute silent wait is not mistaken for a hang.
+- **(A)** skip YouTube caption re-fetch and go straight to ASR (faster; captions rarely appear once marked `no_captions`), or  
+- **(B)** still call `fetchTranscriptDetailed` first in case tracks were added later.
+
+**Proposal: (B)** one cheap caption attempt, then ASR — keeps “captions preferred” invariant. If caption re-fetch is too slow for 55 items, switch to (A) later.
+
+#### Budget and scale — **Claude small delta #2**
+
+- Caption *fetch failures* still **must not** burn `maxNew`.  
+- ASR *success* → extract **does** count toward `maxNew` (default **5**/run).  
+- **@owner:** no separate `--asr-backfill` cap in v1 — same `maxNew` as extract.  
+
+**Expectation (document in README + sync start log):**
+
+> ~55 `no_captions` × default `maxNew=5` ⇒ **≥11 successful ASR+extract runs**, each video also costing minutes of Whisper. First enablement is a **multi-session backfill**, not one command.
+
+Progress stages: `Downloading audio…` / `Transcribing (whisper, ~N min video)…` / `Writing up…`.
+
+#### caption_skips after success — **Claude small delta #1 + @owner**
+
+Deleting the skip row on success is only safe if the recipe will not re-enter extract next run.
+
+**@owner ruling:** delete `caption_skips` row **only if the written recipe is verified** (either `syncMarkVerified: true` or the row’s `verified` is true after write).
+
+| After ASR+extract | caption_skips action |
+|---|---|
+| Recipe **verified** | **Delete** skip row for `videoId` |
+| Recipe **unverified** | **Keep** `no_captions` skip (or set a non-blocking note in detail only) so the next sync does **not** re-ASR |
+
+With keep-on-unverified: the recipe exists; `canWriteExtract` may still want re-extract if unverified — **must not** re-run Whisper. So if skip is kept, candidate loop must treat “recipe already exists” via normal `canWriteExtract` before ASR. Order remains: decision helpers first (skip if verified/archived); only missing/unverified-without-cues paths hit transcript/ASR. **Impl detail:** if an unverified recipe already exists from a prior ASR run, re-extract should reuse **filesystem ASR cache** (same videoId+model+lang) rather than calling Whisper again — cache hit makes re-extract cheap even if captions still fail.
+
+Simplest invariant:
+
+1. Always write ASR cues to fs cache on success.  
+2. Delete DB skip only when `verified`.  
+3. On later runs, caption fail + cache hit → use cache without Whisper (even if skip row still present / re-fetched `no_captions`).
 
 ### 4.8 Data / product semantics
 
 | Field | Proposal |
 |---|---|
-| Recipe row | No schema change required in v1 |
-| `sync_runs.detail` | Record `{ videoId, source: "youtube"\|"asr", asrModel?, asrLang?, durationMs? }` next to extracts |
-| Confidence | Unchanged from Claude; optionally bias default lower only if we add a product rule later — **not required v1** |
-| UI badge | Optional later: “From audio” on detail — nice-to-have, not blocking |
-
-Verified / notes rules unchanged. ASR is only another way to get cues.
+| Recipe row | No schema change in v1 |
+| `sync_runs.detail` | `{ videoId, source: "youtube"\|"asr", asrModel?, asrLang?, durationMs? }` |
+| UI badge / `transcript_source` column | **Defer** (Claude Q5) |
+| Confidence | Unchanged from Claude extract |
 
 ### 4.9 Security / compliance
 
-- Audio stays on the owner’s machine by default (no upload to Anthropic as audio — only **text cues** go to Claude, same as captions).  
-- yt-dlp + private playlist access must use the same identity story as local sync today (cookies / logged-in network as user already does).  
-- Do not commit model weights or audio caches to git.  
-- Document that this is for **personal library** use (same as local caption scrape).
+- Audio stays on owner machine; only **text cues** go to Claude.  
+- **`execFile` argv only** — no shell string building with `videoId`.  
+- No model weights/audio in git.  
+- Personal library / local sync use (same class as caption scrape).
 
 ### 4.10 Failure modes
 
 | Failure | Behavior |
 |---|---|
-| yt-dlp missing / fails | Skip video; detail reason `asr_download_failed`; do not upgrade caption_skip kind over `no_captions` incorrectly |
-| whisper missing / model missing | Fail fast at sync start if `--asr` set |
+| yt-dlp missing / fails | Skip; `asr_download_failed`; leave `no_captions` skip |
+| whisper / model missing | **Fail fast** at sync start if ASR enabled |
 | Empty ASR text | Skip; `asr_empty` |
-| Partial long video | v1: full audio; optional later `--asr-max-minutes=N` |
-| OOM / killed | Leave no cache; retry next run |
+| Duration > 45 min | Skip; `asr_too_long` |
+| OOM / killed | No incomplete cache write; retry next run |
+| Cache identity mismatch | Treat as miss; re-ASR |
 
 ---
 
 ## 5. Chinese-specific notes
 
-- whisper.cpp **supports Chinese**; force `-l zh` for this library.  
-- Prefer **`medium`** minimum; `large-v3-turbo` if quality issues on ingredients.  
-- Mandarin >> Cantonese quality; accept Cantonese as best-effort.  
-- Ingredient names will still be messy → Claude extract remains the structure layer (same as bad CN captions).  
-- Long Chinese transcripts already motivated `MAX_TOKENS = 8192` and extract retries (LLM-1 telemetry still thin for truncation case — ASR will generate more of those samples).
+- whisper.cpp supports Chinese; when lang resolves to `zh`, pass `-l zh`.  
+- Prefer **`medium`** minimum; `large-v3-turbo` if ingredient quality is weak.  
+- Mandarin >> Cantonese; Cantonese best-effort.  
+- ASR-sourced Chinese transcripts are the long-transcript samples LLM-1 still lacks (prior telemetry n=1 English).  
 
 ---
 
 ## 6. UX / CLI surface (v1)
 
 ```bash
-# Opt-in local ASR for no_captions only
-ROUX_ASR=1 ROUX_ASR_LANGUAGE=zh npm run sync
+ROUX_ASR=1 npm run sync
+# or
+npm run sync -- --asr
 
-# Or
-npm run sync -- --asr --asr-lang=zh
+# optional overrides
+ROUX_ASR_LANGUAGE=zh          # force all
+ROUX_ASR_MODEL=medium
+ROUX_ASR_MAX_MINUTES=45       # default
+ROUX_ASR_CACHE_DIR=~/.cache/roux/asr
 ```
 
-Optional later:
-
-- Settings toggle “Transcribe caption-less videos (local Whisper)” — only meaningful on machines that run local sync; **skip in v1** if CLI/env is enough.  
-- Sync UI list of caption skips with “Retry with audio” button → still needs local agent; hard on pure Vercel. Prefer CLI v1.
+On start when ASR enabled, log: tool versions, model path, max minutes, maxNew, and  
+`caption_skips no_captions eligible: N (≈ ceil(N/maxNew) runs at current budget)`.
 
 ---
 
-## 7. Implementation plan (after approval)
+## 7. Implementation plan (after ACCEPTED)
 
-| Step | Work | PR shape | Verify |
+| Step | Work | Verify |
+|---|---|---|
+| 1 | This design accepted | review |
+| 2 | `lib/asr/`: types, language resolve (CJK), cache read/validate/write, cue map + unit tests | `npm test` |
+| 3 | Shell adapter: `execFile` yt-dlp + whisper.cpp; parse JSON segments | manual 1 CN video |
+| 4 | `caption-skips`: ensure kind available in candidate loop; conditional gate | unit/integration |
+| 5 | Wire `run.ts`: opt-in, backlog gate, duration cap, progress, detail, verified-gated skip delete | local sync |
+| 6 | README: install whisper.cpp + model, env vars, multi-run backfill expectation | — |
+
+---
+
+## 8. Decisions — **settled**
+
+| # | Decision | Ruling | Source |
 |---|---|---|---|
-| 1 | Design accepted (this doc) | docs PR | review |
-| 2 | `lib/asr/` module: types, cue map, cache read/write, pure path helpers + unit tests (no binary) | small | `npm test` |
-| 3 | Shell adapter: detect yt-dlp + whisper.cpp, run download/transcribe, parse JSON → cues | local-only; skip in CI | manual smoke on 1 CN video |
-| 4 | Wire `run.ts`: gate `no_captions` + `ROUX_ASR`; progress strings; detail telemetry | thin | local sync |
-| 5 | Docs: README “Local ASR setup” (install models, env vars, disk) | docs | — |
-| 6 | (Optional) `--asr-max-minutes`, engine switch mlx/faster-whisper | later | — |
-
-Do **not** block on schema migration in v1.
-
----
-
-## 8. Decisions — **proposed** (for review)
-
-| # | Decision | Proposal | Needs |
-|---|---|---|---|
-| D1 | Engine | whisper.cpp default; pluggable later | review |
-| D2 | Where | Local sync only; never Vercel | review |
-| D3 | Trigger | Only `no_captions` + explicit opt-in | review |
-| D4 | Language default | `zh` | **@owner** confirm |
-| D5 | Cache | Filesystem under `~/.cache/roux/asr` | review |
-| D6 | Extract | Unchanged `CaptionCue[]` path | review |
-| D7 | Cost | Free local; no hosted ASR in v1 | review |
-| D8 | Default on/off | **Off** unless `ROUX_ASR=1` / `--asr` | review |
-| D9 | Auth-blocked | Never ASR; fix captions access | review |
+| D1 | Engine | whisper.cpp default; pluggable later | accepted |
+| D2 | Where | Local sync only; never Vercel | accepted |
+| D3 | Trigger | Only `no_captions` + explicit opt-in | accepted |
+| D4 | Language | **CJK in title/channel → `zh`, else `auto`**; override via env/flag | **@owner** |
+| D5 | Cache | Fs cache; **validate engine+model+lang on read** (miss if mismatch) | Claude D2 |
+| D6 | Extract | Unchanged `CaptionCue[]` path | accepted |
+| D7 | Cost | Free local; no hosted ASR in v1 | accepted |
+| D8 | Default on/off | **Opt-in** `ROUX_ASR=1` / `--asr` only | **@owner** |
+| D9 | Auth-blocked | Never ASR | accepted |
+| D10 | Backlog gate | Candidate loop must **not** drop `no_captions` when ASR on; need **kinds** not id-only set | Claude D1 |
+| D11 | Subprocess | `execFile`/`spawn` argv array; no shell interpolation | Claude Q3 |
+| D12 | Max duration | **45 minutes** | **@owner** |
+| D13 | Budget | Same `maxNew` as extract; document multi-run backfill | **@owner** |
+| D14 | Skip row after success | **Delete only if recipe verified**; always cache cues; re-extract uses cache | **@owner** + Claude |
+| D15 | `transcript_source` on recipes | Defer | Claude Q5 |
 
 ---
 
-## 9. Open questions
+## 9. Open questions — **closed**
 
-1. **@owner:** Default language always `zh`, or auto when title/channel has CJK?  
-2. **@owner:** Max video length before skip (e.g. 45 min)?  
-3. **@claude-reviewer:** Prefer shelling out to whisper.cpp vs requiring a Node binding? (Proposal: shell out — fewer native build issues.)  
-4. Should successful ASR **delete** the `caption_skips` row for that video? (Proposal: **yes**, or set kind that doesn’t block re-fetch — so a later YouTube caption appearance can win.)  
-5. Store `transcript_source` on `recipes` row for UI badge? (Proposal: **defer**; sync detail is enough for v1.)
+| Q | Answer |
+|---|---|
+| Q1 language default | CJK → zh, else auto (**@owner**) |
+| Q2 max length | 45 min (**@owner**) |
+| Q3 shell vs binding | shell out + `execFile` argv (Claude) |
+| Q4 delete skip on success | only if verified (**@owner**) |
+| Q5 recipe column | defer (Claude) |
 
 ---
 
-## 10. Acceptance criteria (to mark ACCEPTED)
+## 10. Acceptance criteria
 
-1. @claude-reviewer: no blocking design objections (or AGREED with written deltas folded in).  
-2. @owner: language default + opt-in vs always-on for local sync.  
-3. §8 decisions settled.  
-4. Implementation may start at §7 step 2 only after status → **ACCEPTED**.
+1. ~~@claude-reviewer: no blocking objections once D1/D2 folded~~ → **this revision**  
+2. ~~@owner: language, max length, opt-in, budget, skip-delete~~ → **§8**  
+3. Final @claude-reviewer ack on revised doc → status **ACCEPTED**  
+4. Implementation starts at §7 step 2 only after ACCEPTED  
 
 ---
 
 ## 11. Success metrics (post-ship)
 
-- Share of `no_captions` videos that become written recipes with ASR enabled  
-- Median wall time per ASR video (download + whisper)  
-- Extract `attempts` distribution on ASR-sourced Chinese transcripts (feeds LLM-1)  
-- Manual: 3 Chinese cooking videos, captions disabled → recipes with usable step timestamps  
+- Share of `no_captions` → written recipes with ASR on  
+- Median wall time per ASR video  
+- Extract `attempts` on ASR Chinese transcripts (LLM-1)  
+- Manual: 3 CN caption-disabled cooking videos → usable step timestamps  
+- Backlog: eligible `no_captions` count decreases across successive `--asr` syncs  
 
 ---
 
-NEXT: @claude-reviewer
+NEXT: @claude-reviewer (re-ack revised design)
