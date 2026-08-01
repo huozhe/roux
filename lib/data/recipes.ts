@@ -1,7 +1,6 @@
 import { FIXTURE_RECIPES } from "@/lib/fixtures/recipes";
 import { filterAndSortRecipes } from "@/lib/search";
 import type { Recipe, RecipeListParams } from "@/lib/types";
-import { getRecipeFromDb, listRecipesFromDb } from "./db-recipes";
 
 export type ListRecipesOpts = {
   /** When set (or auth session has a user), prefer DB if DATABASE_URL is present. */
@@ -11,6 +10,9 @@ export type ListRecipesOpts = {
 /**
  * Prefer live DB when a userId is available (session) and DATABASE_URL is set.
  * Otherwise fixtures (local demo without DB).
+ *
+ * Live path uses SQL filter/sort (`lib/recipes/queries.listRecipes`) — ARCH-2.
+ * Fixtures still use in-memory `filterAndSortRecipes`.
  */
 async function resolveUserId(opts?: ListRecipesOpts): Promise<string | null> {
   if (opts?.userId) return opts.userId;
@@ -35,7 +37,8 @@ export async function listRecipes(
   try {
     const userId = await resolveUserId(opts);
     if (wantLive(userId) && userId) {
-      return listRecipesFromDb(userId, params);
+      const { listRecipes: listFromSql } = await import("@/lib/recipes/queries");
+      return listFromSql(userId, params);
     }
   } catch {
     /* fall through to fixtures */
@@ -50,7 +53,8 @@ export async function getRecipe(
   try {
     const userId = await resolveUserId(opts);
     if (wantLive(userId) && userId) {
-      return getRecipeFromDb(userId, id);
+      const { getRecipe: getFromSql } = await import("@/lib/recipes/queries");
+      return getFromSql(userId, id);
     }
   } catch {
     /* fall through to fixtures */
