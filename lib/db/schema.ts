@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Ingredient, Step, UserPrefs } from "@/lib/types";
@@ -134,6 +135,10 @@ export const recipeGrants = roux.table(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (t) => [
+    // Must match migration 0004 — otherwise db:push can drop the partial unique.
+    uniqueIndex("recipe_grants_active_unique")
+      .on(t.recipeId, t.recipientUserId)
+      .where(sql`${t.revokedAt} IS NULL`),
     index("recipe_grants_recipient_idx").on(t.recipientUserId),
     index("recipe_grants_owner_idx").on(t.ownerUserId),
     index("recipe_grants_recipe_idx").on(t.recipeId),
