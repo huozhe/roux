@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import {
   RATE_LIMITS,
   rateLimitResponse,
-  takeRateLimit,
+  takeRateLimitMulti,
 } from "@/lib/rate-limit";
 import { resolveAppUserId } from "@/lib/recipes/auth";
 import { runSyncForUser, type SyncProgress } from "@/lib/sync";
@@ -27,14 +27,6 @@ export async function POST() {
     });
   }
 
-  // SEC-4: shared ANTHROPIC_API_KEY — cap cloud sync per user.
-  const rl = takeRateLimit(
-    `sync:${userId}`,
-    RATE_LIMITS.sync.limit,
-    RATE_LIMITS.sync.windowMs,
-  );
-  if (!rl.ok) return rateLimitResponse(rl);
-
   if (!process.env.DATABASE_URL) {
     return new Response(JSON.stringify({ error: "DATABASE_URL not set" }), {
       status: 503,
@@ -42,6 +34,7 @@ export async function POST() {
     });
   }
 
+  // Prefer accurate SYNC_LOCAL_ONLY 503 over 429 when cloud is off.
   const onVercel = process.env.VERCEL === "1";
   const allowCloud = process.env.SYNC_ALLOW_CLOUD === "true";
   if (onVercel && !allowCloud) {
@@ -58,6 +51,21 @@ export async function POST() {
       },
     );
   }
+
+  // SEC-4: shared project budget — global + per-user (after cloud-enabled check).
+  const rl = takeRateLimitMulti([
+    {
+      key: "sync:__global__",
+      limit: RATE_LIMITS.sync.global.limit,
+      windowMs: RATE_LIMITS.sync.global.windowMs,
+    },
+    {
+      key: `sync:${userId}`,
+      limit: RATE_LIMITS.sync.perUser.limit,
+      windowMs: RATE_LIMITS.sync.perUser.windowMs,
+    },
+  ]);
+  if (!rl.ok) return rateLimitResponse(rl);
 
   const encoder = new TextEncoder();
 
