@@ -50,7 +50,7 @@ add a write or a cron to a table whose whole job is one indexed lookup.
 **Guest** (public in `proxy.ts`, `robots: noindex`, `referrer: no-referrer` so
 the token never rides along to YouTube in a `Referer` header):
 
-- `/s/[token]` — the shelf: search, cuisine/main filters, sort, export
+- `/s/[token]` — the shelf: search, cuisine/main filters, sort
 - `/s/[token]/recipes/[id]` — recipe, read-only
 - `/s/[token]/recipes/[id]/cook` — cook mode
 
@@ -68,8 +68,8 @@ optional props rather than being forked: `basePath` (URL prefix, `""` for the
 owner) and a read-only flag. `RecipeDetail`'s existing `isGrantee` became
 `isReadOnly` now that two roles are read-only; `role` gained `"guest"`.
 
-Guest export is client-side from the recipes already rendered on the page, so
-there is no unauthenticated export endpoint to secure.
+Guests get no export or download — the owner's call. Nothing on a guest page
+writes, and no unauthenticated endpoint serves recipe data.
 
 ## 5. Tests
 
