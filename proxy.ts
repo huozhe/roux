@@ -4,7 +4,7 @@ import { authConfig } from "@/lib/auth.config";
 
 /**
  * T1 route guard (Next 16 proxy.ts; replaces deprecated middleware.ts).
- * Guests → /login; authed /login → /. Public: /login, /r/*, /api/auth/*
+ * Guests → /login; authed /login → /. Public: /login, /r/*, /s/*, /api/auth/*
  */
 const { auth } = NextAuth(authConfig);
 
@@ -22,6 +22,7 @@ export default auth((req) => {
     pathname === "/login" ||
     pathname.startsWith("/login/") ||
     pathname.startsWith("/r/") ||
+    pathname.startsWith("/s/") || // whole-library guest link; token is the credential
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/cron"); // CRON_SECRET checked in route
 

@@ -44,11 +44,14 @@ export function CookMode({
   recipe,
   prefs = DEFAULT_PREFS,
   showTimestamps: showTimestampsProp,
+  basePath = "",
 }: {
   recipe: Recipe;
   prefs?: UserPrefs;
   /** @deprecated prefer prefs.timestamps */
   showTimestamps?: boolean;
+  /** URL prefix, e.g. `/s/<token>` in shared mode. */
+  basePath?: string;
 }) {
   const router = useRouter();
   const livePrefs = useLivePrefs(prefs);
@@ -114,7 +117,7 @@ export function CookMode({
 
   const exit = () => {
     void releaseLock();
-    router.push(`/recipes/${recipe.id}`);
+    router.push(`${basePath}/recipes/${recipe.id}`);
   };
 
   const next = () => {
@@ -133,7 +136,10 @@ export function CookMode({
     return (
       <div style={{ padding: 26.4 }}>
         <p>No steps on this recipe.</p>
-        <Link href={`/recipes/${recipe.id}`} className="btn btn-secondary">
+        <Link
+          href={`${basePath}/recipes/${recipe.id}`}
+          className="btn btn-secondary"
+        >
           Exit
         </Link>
       </div>

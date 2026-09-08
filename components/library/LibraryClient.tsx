@@ -24,6 +24,10 @@ type Props = {
   prefs?: UserPrefs;
   /** Inter-user grants to this user (separate shelf). */
   sharedWithMe?: GrantedRecipeSummary[];
+  /** Guest view (whole-library link): browse, search and sort only. */
+  readOnly?: boolean;
+  /** URL prefix for recipe links, e.g. `/s/<token>`. */
+  basePath?: string;
 };
 
 function defaultDir(sort: SortKey): SortDir {
@@ -35,6 +39,8 @@ export function LibraryClient({
   lastSyncLabel = "never",
   prefs = DEFAULT_PREFS,
   sharedWithMe = [],
+  readOnly = false,
+  basePath = "",
 }: Props) {
   const [recipes, setRecipes] = useState(initialRecipes);
   const [query, setQuery] = useState("");
@@ -199,8 +205,8 @@ export function LibraryClient({
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ fontSize: 34, margin: 0 }}>Library</h1>
           <div className="text-muted" style={{ fontSize: 13 }}>
-            {totalLibrary} recipe{totalLibrary === 1 ? "" : "s"} · synced{" "}
-            {lastSyncLabel}
+            {totalLibrary} recipe{totalLibrary === 1 ? "" : "s"}
+            {readOnly ? null : <> · synced {lastSyncLabel}</>}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 240, position: "relative" }}>
@@ -410,46 +416,48 @@ export function LibraryClient({
 
       {/* Filters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8.8 }}>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
+        {readOnly ? null : (
           <div
             style={{
-              fontSize: 11,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--color-neutral-700)",
-              width: 74,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 10,
             }}
           >
-            Show
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--color-neutral-700)",
+                width: 74,
+              }}
+            >
+              Show
+            </div>
+            <div className="seg" role="radiogroup" aria-label="Library view">
+              <label className="seg-opt">
+                <input
+                  type="radio"
+                  name="view"
+                  checked={view === "library"}
+                  onChange={() => setView("library")}
+                />
+                <span>Library</span>
+              </label>
+              <label className="seg-opt">
+                <input
+                  type="radio"
+                  name="view"
+                  checked={view === "archive"}
+                  onChange={() => setView("archive")}
+                />
+                <span>Archive · {archiveCount}</span>
+              </label>
+            </div>
           </div>
-          <div className="seg" role="radiogroup" aria-label="Library view">
-            <label className="seg-opt">
-              <input
-                type="radio"
-                name="view"
-                checked={view === "library"}
-                onChange={() => setView("library")}
-              />
-              <span>Library</span>
-            </label>
-            <label className="seg-opt">
-              <input
-                type="radio"
-                name="view"
-                checked={view === "archive"}
-                onChange={() => setView("archive")}
-              />
-              <span>Archive · {archiveCount}</span>
-            </label>
-          </div>
-        </div>
+        )}
 
         {view === "library" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8.8 }}>
@@ -665,7 +673,12 @@ export function LibraryClient({
           }}
         >
           {list.map((r) => (
-            <RecipeCard key={r.id} recipe={r} sort={sort} />
+            <RecipeCard
+              key={r.id}
+              recipe={r}
+              sort={sort}
+              basePath={basePath}
+            />
           ))}
         </div>
       ) : null}

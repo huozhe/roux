@@ -15,9 +15,11 @@ const STATUS_TEXT: Record<"gone" | "off_playlist", string> = {
 type Props = {
   recipe: Recipe;
   sort: SortKey;
+  /** URL prefix, e.g. `/s/<token>` in shared mode. */
+  basePath?: string;
 };
 
-export function RecipeCard({ recipe: r, sort }: Props) {
+export function RecipeCard({ recipe: r, sort, basePath = "" }: Props) {
   const time = formatCookMinutes(r.cook_minutes);
   const dateLabel =
     sort === "uploaded" && r.uploaded_at
@@ -35,7 +37,7 @@ export function RecipeCard({ recipe: r, sort }: Props) {
 
   return (
     <Link
-      href={`/recipes/${r.id}`}
+      href={`${basePath}/recipes/${r.id}`}
       className="card elev-sm"
       style={{
         padding: 10,

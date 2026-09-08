@@ -8,6 +8,7 @@ import { getTableColumns, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import {
   captionSkips,
+  libraryShares,
   playlists,
   recipeGrants,
   recipeTombstones,
@@ -25,6 +26,7 @@ const TABLES: { name: string; table: PgTable; allowExtra?: string[] }[] = [
   { name: "recipes", table: recipes, allowExtra: ["search"] },
   { name: "share_links", table: shareLinks },
   { name: "recipe_grants", table: recipeGrants },
+  { name: "library_shares", table: libraryShares },
   { name: "sync_runs", table: syncRuns },
   { name: "recipe_tombstones", table: recipeTombstones },
   { name: "caption_skips", table: captionSkips },
