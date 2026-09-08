@@ -27,13 +27,19 @@ export function RecipeDetail({
   recipe: initial,
   prefs = DEFAULT_PREFS,
   role = "owner",
+  basePath = "",
 }: {
   recipe: Recipe;
   prefs?: UserPrefs;
-  /** owner = full UI; grantee = read-only (inter-user share). */
-  role?: "owner" | "grantee";
+  /**
+   * owner = full UI; grantee = read-only (inter-user share);
+   * guest = read-only (whole-library link, no account).
+   */
+  role?: "owner" | "grantee" | "guest";
+  /** URL prefix, e.g. `/s/<token>` in shared mode. */
+  basePath?: string;
 }) {
-  const isGrantee = role === "grantee";
+  const isReadOnly = role !== "owner";
   const [recipe, setRecipe] = useState(initial);
   const livePrefs = useLivePrefs(prefs);
   const showTimestamps = livePrefs.timestamps !== false;
@@ -113,7 +119,7 @@ export function RecipeDetail({
       }}
     >
       <Link
-        href="/"
+        href={basePath || "/"}
         className="btn btn-ghost"
         style={{
           alignSelf: "flex-start",
@@ -161,7 +167,7 @@ export function RecipeDetail({
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8.8 }}>
           <Link
-            href={`/recipes/${recipe.id}/cook`}
+            href={`${basePath}/recipes/${recipe.id}/cook`}
             className="btn btn-primary"
             style={{ minHeight: 44, marginTop: 0 }}
           >
@@ -187,7 +193,7 @@ export function RecipeDetail({
               Watch video
             </a>
           )}
-          {!isGrantee ? (
+          {!isReadOnly ? (
             <>
               <button
                 type="button"
@@ -282,7 +288,7 @@ export function RecipeDetail({
               ? "The uploader took this video down, so the link is dead. The write-up, your notes and the timestamps stay — they\'re yours now. Roux keeps the channel name and the original video title for searching."
               : "You removed this from the playlist, but the recipe stays in your library until you archive it. The video still plays."}
           </div>
-          {!isGrantee ? (
+          {!isReadOnly ? (
             <button
               type="button"
               className="btn btn-secondary"
@@ -295,7 +301,7 @@ export function RecipeDetail({
         </div>
       )}
 
-      {!isGrantee ? (
+      {!isReadOnly ? (
         <RecipeRemoveDialog
           open={confirming}
           recipeId={recipe.id}
@@ -308,7 +314,7 @@ export function RecipeDetail({
         />
       ) : null}
 
-      {editing && draft && !isGrantee ? (
+      {editing && draft && !isReadOnly ? (
         <RecipeEditor
           draft={draft}
           setDraft={setDraft}
@@ -318,7 +324,7 @@ export function RecipeDetail({
         />
       ) : (
         <>
-          {!isGrantee && !recipe.verified && (
+          {!isReadOnly && !recipe.verified && (
             <div
               className="card"
               style={{
@@ -373,7 +379,7 @@ export function RecipeDetail({
             onNotes={onNotesChange}
             notesStatus={notesStatus}
             showTimestamps={showTimestamps}
-            showNotes={!isGrantee}
+            showNotes={!isReadOnly}
           />
         </>
       )}

@@ -166,4 +166,8 @@ export const RATE_LIMITS = {
   recipeGrants: {
     perUser: { limit: 30, windowMs: 60 * 60 * 1000 },
   },
+  /** Mint whole-library guest links. */
+  libraryShares: {
+    perUser: { limit: 20, windowMs: 60 * 60 * 1000 },
+  },
 } as const;

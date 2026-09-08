@@ -14,6 +14,7 @@ import {
 import { randomBytes } from "node:crypto";
 import {
   getDb,
+  libraryShares,
   recipeGrants,
   recipeTombstones,
   recipes,
@@ -848,4 +849,188 @@ export async function getActiveShareSlug(
     )
     .limit(1);
   return rows[0]?.slug ?? null;
+}
+
+// ── Whole-library guest access (docs/plans/shared-library-mode.md) ───────
+
+/**
+ * 128 bits. The token is the only credential a guest has — no account, no
+ * session — so entropy is the whole security story. Deliberately not the
+ * 8-hex `makeShareSlug` used for single-recipe links (SEC-5).
+ */
+function libraryShareToken(): string {
+  return randomBytes(16).toString("hex");
+}
+
+export type LibraryShareListItem = {
+  token: string;
+  label: string;
+  createdAt: string;
+};
+
+/** Mint a guest link into the caller's whole library. */
+export async function createLibraryShare(
+  userId: string,
+  label: string,
+): Promise<LibraryShareListItem> {
+  const db = getDb();
+  const clean = label.trim().slice(0, 60);
+  const token = libraryShareToken();
+  const rows = await db
+    .insert(libraryShares)
+    .values({ token, userId, label: clean })
+    .returning({
+      token: libraryShares.token,
+      label: libraryShares.label,
+      createdAt: libraryShares.createdAt,
+    });
+  const row = rows[0]!;
+  return {
+    token: row.token,
+    label: row.label,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function listLibraryShares(
+  userId: string,
+): Promise<LibraryShareListItem[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      token: libraryShares.token,
+      label: libraryShares.label,
+      createdAt: libraryShares.createdAt,
+    })
+    .from(libraryShares)
+    .where(
+      and(eq(libraryShares.userId, userId), isNull(libraryShares.revokedAt)),
+    )
+    .orderBy(desc(libraryShares.createdAt));
+
+  return rows.map((r) => ({
+    token: r.token,
+    label: r.label,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/** Revoke one guest link. Other guests' links keep working. */
+export async function revokeLibraryShare(
+  userId: string,
+  token: string,
+): Promise<"ok" | "not_found" | "forbidden"> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: libraryShares.userId,
+      revokedAt: libraryShares.revokedAt,
+    })
+    .from(libraryShares)
+    .where(eq(libraryShares.token, token))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return "not_found";
+  if (row.userId !== userId) return "forbidden";
+  if (row.revokedAt) return "ok";
+
+  await db
+    .update(libraryShares)
+    .set({ revokedAt: new Date() })
+    .where(eq(libraryShares.token, token));
+  return "ok";
+}
+
+export type SharedLibraryOwner = {
+  ownerName: string | null;
+  ownerEmail: string;
+  label: string;
+};
+
+/** Token → owner, or null when the token is unknown or revoked. */
+async function resolveLibraryShare(
+  token: string,
+): Promise<(SharedLibraryOwner & { userId: string }) | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: libraryShares.userId,
+      label: libraryShares.label,
+      ownerName: users.name,
+      ownerEmail: users.email,
+    })
+    .from(libraryShares)
+    .innerJoin(users, eq(libraryShares.userId, users.id))
+    .where(
+      and(eq(libraryShares.token, token), isNull(libraryShares.revokedAt)),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export type SharedLibrary = SharedLibraryOwner & { recipes: Recipe[] };
+
+/**
+ * Guest view of a whole library: live, read-only, notes and verified stripped.
+ * Archived and deleted recipes are never shown — the shelf is what the owner
+ * currently cooks from.
+ */
+export async function getSharedLibrary(
+  token: string,
+): Promise<SharedLibrary | null> {
+  const share = await resolveLibraryShare(token);
+  if (!share) return null;
+
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(recipes)
+    .where(
+      and(
+        eq(recipes.userId, share.userId),
+        isNull(recipes.deletedAt),
+        isNull(recipes.archivedAt),
+      ),
+    )
+    .orderBy(desc(recipes.addedAt));
+
+  return {
+    ownerName: share.ownerName,
+    ownerEmail: share.ownerEmail,
+    label: share.label,
+    recipes: rows.map((r) => stripRecipeForPublicShare(rowToRecipe(r))),
+  };
+}
+
+/** One recipe inside a shared library. Same visibility rules as the shelf. */
+export async function getSharedLibraryRecipe(
+  token: string,
+  id: string,
+): Promise<(SharedLibraryOwner & { recipe: Recipe }) | null> {
+  const share = await resolveLibraryShare(token);
+  if (!share) return null;
+
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(recipes)
+    .where(
+      and(
+        eq(recipes.id, id),
+        eq(recipes.userId, share.userId),
+        isNull(recipes.deletedAt),
+        isNull(recipes.archivedAt),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ownerName: share.ownerName,
+    ownerEmail: share.ownerEmail,
+    label: share.label,
+    recipe: stripRecipeForPublicShare(rowToRecipe(row)),
+  };
 }

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { AccountCard } from "@/components/settings/AccountCard";
 import { CategoriesEditor } from "@/components/settings/CategoriesEditor";
 import { ExportButtons } from "@/components/settings/ExportButtons";
+import { LibraryGuests } from "@/components/settings/LibraryGuests";
 import { PlaylistPicker } from "@/components/settings/PlaylistPicker";
 import { PrefsForm } from "@/components/settings/PrefsForm";
 import { ShareLinksList } from "@/components/settings/ShareLinksList";
@@ -11,6 +12,7 @@ import { resolveAppUserId } from "@/lib/recipes/auth";
 import {
   getUserPrefs,
   learnCategoriesFromUserRecipes,
+  listLibraryShares,
   listShareLinks,
 } from "@/lib/recipes/queries";
 import { DEFAULT_PREFS } from "@/lib/types";
@@ -42,6 +44,7 @@ export default async function SettingsPage() {
 
   let prefs = DEFAULT_PREFS;
   let shareLinks: Array<{ slug: string; title: string; url: string }> = [];
+  let guests: Array<{ token: string; label: string; url: string }> = [];
 
   if (hasDb && userId) {
     try {
@@ -53,6 +56,12 @@ export default async function SettingsPage() {
         slug: l.slug,
         title: l.title,
         url: origin ? `${origin}/r/${l.slug}` : `/r/${l.slug}`,
+      }));
+      const shares = await listLibraryShares(userId);
+      guests = shares.map((g) => ({
+        token: g.token,
+        label: g.label,
+        url: origin ? `${origin}/s/${g.token}` : `/s/${g.token}`,
       }));
     } catch {
       /* keep defaults */
@@ -134,6 +143,8 @@ export default async function SettingsPage() {
         </div>
 
         <ShareLinksList initialLinks={shareLinks} />
+
+        <LibraryGuests initialGuests={guests} origin={origin} />
 
         <ExportButtons />
 

@@ -145,6 +145,28 @@ export const recipeGrants = roux.table(
   ],
 );
 
+/**
+ * Whole-library guest access (docs/plans/shared-library-mode.md).
+ * One row per invited guest. The token IS the credential — 128 bits, so it is
+ * not guessable; no account, no cookie, no session. Owner revokes per guest.
+ */
+export const libraryShares = roux.table(
+  "library_shares",
+  {
+    token: text("token").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Who the owner handed it to, e.g. "Mum". Display only. */
+    label: text("label").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("library_shares_user_idx").on(t.userId)],
+);
+
 export const syncRuns = roux.table("sync_runs", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   userId: uuid("user_id")
@@ -211,6 +233,7 @@ export type PlaylistRow = typeof playlists.$inferSelect;
 export type RecipeRow = typeof recipes.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
 export type RecipeGrant = typeof recipeGrants.$inferSelect;
+export type LibraryShare = typeof libraryShares.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type RecipeTombstone = typeof recipeTombstones.$inferSelect;
 export type CaptionSkip = typeof captionSkips.$inferSelect;
