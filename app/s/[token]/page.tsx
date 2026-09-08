@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryClient } from "@/components/library/LibraryClient";
-import { SharedExportButtons } from "@/components/library/SharedExportButtons";
 import { getSharedLibrary } from "@/lib/recipes/queries";
 
 export const dynamic = "force-dynamic";
@@ -31,17 +30,11 @@ export default async function SharedLibraryPage({ params }: PageProps) {
           width: "100%",
           margin: "0 auto",
           padding: "26.4px 17.6px 0",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 13.2,
+          fontSize: 13.5,
         }}
       >
-        <span style={{ flex: 1, minWidth: 200, fontSize: 13.5 }}>
-          {owner}&apos;s cookbook. Notes stay private, and the owner can kill
-          this link at any time.
-        </span>
-        <SharedExportButtons recipes={shared.recipes} />
+        {owner}&apos;s cookbook. Notes stay private, and the owner can kill this
+        link at any time.
       </div>
       <LibraryClient recipes={shared.recipes} readOnly basePath={basePath} />
     </>
