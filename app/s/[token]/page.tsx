@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LibraryClient } from "@/components/library/LibraryClient";
+import { TooManyRequests } from "@/components/share/TooManyRequests";
+import { guestReadAllowed } from "@/lib/guest-rate-limit";
 import { getSharedLibrary } from "@/lib/recipes/queries";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export const metadata: Metadata = {
 export default async function SharedLibraryPage({ params }: PageProps) {
   const { token } = await params;
   if (!process.env.DATABASE_URL) notFound();
+  if (!(await guestReadAllowed())) return <TooManyRequests />;
 
   const shared = await getSharedLibrary(token);
   if (!shared) notFound();

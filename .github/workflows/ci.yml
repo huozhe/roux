@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Public repo: fork PRs run this workflow. It needs no write scope and no
+# secrets, so pin the token to read-only.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

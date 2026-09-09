@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { IngredientsList } from "@/components/recipe/IngredientsList";
+import { TooManyRequests } from "@/components/share/TooManyRequests";
+import { guestReadAllowed } from "@/lib/guest-rate-limit";
 import { getSharedRecipeBySlug } from "@/lib/data/shares";
 import {
   formatCookMinutes,
@@ -285,6 +287,8 @@ function PublicRecipeBody({ recipe }: { recipe: Recipe }) {
 
 export default async function PublicSharePage({ params }: PageProps) {
   const { slug } = await params;
+  if (!(await guestReadAllowed())) return <TooManyRequests />;
+
   const recipe = await getSharedRecipeBySlug(slug);
   if (!recipe) notFound();
 

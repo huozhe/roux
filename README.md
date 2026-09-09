@@ -87,3 +87,7 @@ npm run db:push          # tables → roux.users, roux.recipes, …
 ```
 
 If you already pushed into `public` earlier, optionally run `lib/db/migrations/0000_drop_public_if_legacy.sql` then re-push into `roux`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

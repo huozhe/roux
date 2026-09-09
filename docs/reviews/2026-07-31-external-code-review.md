@@ -647,6 +647,10 @@ gh pr create \
   --body-file docs/reviews/.pr-body.md
 ```
 
+> Historical. The seed file `docs/reviews/.pr-body.md` was deleted when the repo
+> went public: its ledger froze with every finding at `OPEN`, which read as a
+> list of live vulnerabilities long after all 26 were discharged.
+
 **Grok — read the review and respond (Round 1):**
 
 ```bash

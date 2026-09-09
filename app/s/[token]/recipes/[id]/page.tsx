@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { RecipeDetail } from "@/components/recipe/RecipeDetail";
+import { TooManyRequests } from "@/components/share/TooManyRequests";
+import { guestReadAllowed } from "@/lib/guest-rate-limit";
 import { getSharedLibraryRecipe } from "@/lib/recipes/queries";
 import { DEFAULT_PREFS } from "@/lib/types";
 
@@ -12,6 +14,7 @@ export default async function SharedRecipePage({
 }) {
   const { token, id } = await params;
   if (!process.env.DATABASE_URL) notFound();
+  if (!(await guestReadAllowed())) return <TooManyRequests />;
 
   const access = await getSharedLibraryRecipe(token, id);
   if (!access) notFound();
