@@ -6,7 +6,7 @@
 
 July external code review fully discharged; issue #3 closed. Round 2 (multi-user) complete.
 
-**The repo is public** (MIT) as of 2026-09-09, head `d715dbb`. Going public added a per-IP throttle on the unauthenticated `/r/*` and `/s/*` routes (`lib/guest-rate-limit.ts`), README screenshots, and removed the stale `docs/reviews/.pr-body.md` ledger, whose statuses had frozen at `OPEN` and read as live vulnerabilities.
+**The repo is public** (MIT) as of 2026-09-09. Going public added a per-IP throttle on the unauthenticated `/r/*` and `/s/*` routes (`lib/guest-rate-limit.ts`), README screenshots, and removed the stale `docs/reviews/.pr-body.md` ledger, whose statuses had frozen at `OPEN` and read as live vulnerabilities.
 
 **Shared library mode is shipped** — deployed 2026-09-08, migration `0005_library_shares.sql` applied to Neon and verified. Guests open `/s/<token>` and read the owner's whole library with no account: search, filters, sort and cook mode; no export. Design and known limits: `docs/plans/shared-library-mode.md`. Claude implemented this one at the owner's direction, so it has had **no independent review**.
 
@@ -22,7 +22,7 @@ Implement local ASR from **§7 step 2** of `docs/plans/local-asr-whisper.md` (`l
 ## Resume
 
 ```bash
-git rev-list -1 main            # expect d715dbb
+git log --oneline -3            # top commit is the last STATE.md refresh
 npm test                        # 167 pass
 gh pr list                      # expect empty
 ```
