@@ -170,4 +170,12 @@ export const RATE_LIMITS = {
   libraryShares: {
     perUser: { limit: 20, windowMs: 60 * 60 * 1000 },
   },
+  /**
+   * Guest reads of `/r/:slug` and `/s/:token` (SEC-5).
+   * Keyed per IP. Bounds slug guessing: 8-hex slugs are 32 bits, so 100/min
+   * leaves a scanner ~81 years per slug space. Far above real browsing.
+   */
+  guestShares: {
+    perIp: { limit: 100, windowMs: 60 * 1000 },
+  },
 } as const;
