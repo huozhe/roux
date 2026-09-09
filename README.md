@@ -2,6 +2,20 @@
 
 Private web app: YouTube cooking playlists → searchable recipe library (ingredients, steps, timestamps).
 
+## Screenshots
+
+**Library** — every recipe from the playlist, filtered by cuisine and main ingredient, searchable by ingredient or author. Here: Japanese, 33 of 164.
+
+![Library view: a grid of Japanese recipe cards, with cuisine and main-ingredient filter rows above](docs/screenshots/library.jpg)
+
+**Recipe** — ingredients grouped by role, steps linked to the moment in the video, private notes at the bottom.
+
+![Recipe view: Japanese Beef Bowl, ingredients grouped under protein, produce, sauces and liquids, with seven timestamped steps](docs/screenshots/recipe.jpg)
+
+**Cook mode** — one step at a time, only the ingredients that step needs, screen kept awake.
+
+![Cook mode: a single step in large type, with the ingredients used in that step](docs/screenshots/cook-mode.jpg)
+
 ## Spec
 
 - Product / API / data: [`prototype/HANDOFF.md`](prototype/HANDOFF.md)
