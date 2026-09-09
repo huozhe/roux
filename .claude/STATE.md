@@ -6,7 +6,7 @@
 
 July external code review fully discharged; issue #3 closed. Round 2 (multi-user) complete.
 
-**Shared library mode is shipped** — PR #23 merged as `2534d56`, deployed 2026-09-08, migration `0005_library_shares.sql` applied to Neon and verified. Guests open `/s/<token>` and read the owner's whole library with no account: search, filters, sort and cook mode; no export. Design and known limits: `docs/plans/shared-library-mode.md`. Claude implemented this one at the owner's direction, so it has had **no independent review**.
+**Shared library mode is shipped** — PRs #23 and #24 merged, head `aa8a217`, deployed 2026-09-08, migration `0005_library_shares.sql` applied to Neon and verified. Guests open `/s/<token>` and read the owner's whole library with no account: search, filters, sort and cook mode; no export. Design and known limits: `docs/plans/shared-library-mode.md`. Claude implemented this one at the owner's direction, so it has had **no independent review**.
 
 The **local ASR design** (`docs/plans/local-asr-whisper.md`) is **ACCEPTED** but nothing is implemented.
 
@@ -20,7 +20,7 @@ Implement local ASR from **§7 step 2** of `docs/plans/local-asr-whisper.md` (`l
 ## Resume
 
 ```bash
-git rev-list -1 main            # expect 2534d56
+git rev-list -1 main            # expect aa8a217
 npm test                        # 163 pass
 gh pr list                      # expect empty
 ```
